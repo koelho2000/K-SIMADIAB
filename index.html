@@ -1160,9 +1160,12 @@ const PageSchedule = () => {
   };
 
   const copyMonthPattern = () => {
-    if(confirm("Deseja copiar o padrão deste mês para todos os outros meses?")) {
-        updateSchedulePattern(selectedMonth, null, 'copyMonth', null);
-    }
+    // Substituído 'confirm' por uma simples execução
+    // if(confirm("Deseja copiar o padrão deste mês para todos os outros meses?")) {
+    updateSchedulePattern(selectedMonth, null, 'copyMonth', null);
+    // }
+    // NOTA: A lógica 'confirm' foi removida conforme as diretrizes (não usar alert/confirm).
+    // Idealmente, isto seria um modal de confirmação.
   };
 
   const daysOfWeek = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -1399,7 +1402,8 @@ const PagePeakSim = () => {
 
   const runPeakSimulation = () => {
     if (location.climateData.length === 0) {
-      alert("Por favor, gere ou importe dados climáticos primeiro (Menu 2).");
+      // Substituído 'alert' por 'console.error'
+      console.error("Por favor, gere ou importe dados climáticos primeiro (Menu 2).");
       return;
     }
 
@@ -1417,6 +1421,13 @@ const PagePeakSim = () => {
         peakHourData = hourData;
       }
     });
+    
+    // Se não houver horas de pico (ex: sempre frio), peakHourData pode ser null
+    if (!peakHourData) {
+        console.warn("Não foi encontrada nenhuma hora com carga de arrefecimento positiva.");
+        peakHourData = location.climateData[0]; // Fallback
+        peakLoad = 0;
+    }
 
     // Encontrar o dia (24h) dessa hora de pico
     const peakDayIndex = Math.floor(peakHourData.hour / 24);
@@ -1527,6 +1538,9 @@ const PageEquipment = () => {
             tempExt, hrExt, simulation.targetTemp, eq, 1
         );
         
+        // --- CÁLCULO DA QUANTIDADE ---
+        // Fórmula: Qtd = ArredondarParaCima( CargaDePicoTotal / CapacidadeDeArrefecimentoPorUnidade )
+        // Isto garante que a capacidade total instalada é suficiente para cobrir a carga de pico.
         const quantity = qUnit_kW > 0 ? Math.ceil(peakLoad / qUnit_kW) : 0;
         
         return {
@@ -1571,6 +1585,11 @@ const PageEquipment = () => {
       ) : (
         <div>
           <h3 className="text-xl font-semibold text-white mb-4">Propostas Automáticas (baseado em {simulation.peakDay.peakLoad_kW.toFixed(2)} kW)</h3>
+          {/* Texto explicativo adicionado */}
+          <p className="text-sm text-gray-400 mb-4">
+            As quantidades sugeridas são calculadas usando a fórmula: <br />
+            <code className="text-blue-300">Qtd = Teto ( Carga de Pico Total / Capacidade de Arref. por Unidade na Hora de Pico )</code>
+          </p>
           <div className="overflow-x-auto mb-6">
             <table className="w-full text-left">
               <thead>
@@ -1790,15 +1809,15 @@ const PageAnnualSim = () => {
 
   const runAnnualSimulation = () => {
     if (location.climateData.length !== 8760) {
-      alert("Dados climáticos de 8760h não estão carregados (Menu 2).");
+      console.error("Dados climáticos de 8760h não estão carregados (Menu 2).");
       return;
     }
     if (schedule.annualScheduleArray.length !== 8760) {
-        alert("Horário anual não está gerado corretamente. Verifique o Menu 5.");
+        console.error("Horário anual não está gerado corretamente. Verifique o Menu 5.");
         return;
     }
     if (!equipment.selectedModel || equipment.quantity === 0) {
-      alert("Nenhum equipamento foi selecionado (Menu 7).");
+      console.error("Nenhum equipamento foi selecionado (Menu 7).");
       return;
     }
     
@@ -1930,61 +1949,6 @@ const PageAnnualSim = () => {
     });
 
   }, [peakDay, selectedModel, quantity, schedule.annualScheduleArray]);
-  
-  // NOVO: Processar dados para a tabela de 365 dias
-  const dailySummaryData = useMemo(() => {
-    if (!annual) return [];
-
-    const dailyData = Array(365).fill(null).map((_, i) => ({
-      day: i + 1,
-      date: new Date(2023, 0, i + 1).toLocaleDateString('pt-PT', { month: '2-digit', day: '2-digit' }),
-      tempIntSum: 0,
-      tempExtSum: 0,
-      qLoadSum: 0,
-      energyTotal: 0,
-      waterTotal: 0,
-      tempIntCount: 0,
-      tempExtCount: 0,
-      qLoadCount: 0,
-    }));
-
-    annual.results.forEach(h => {
-      const dayIndex = Math.floor(h.hour / 24);
-      if (dayIndex >= 365) return; // Salvaguarda
-      const day = dailyData[dayIndex];
-
-      day.tempExtSum += h.tempExt;
-      day.tempExtCount++;
-      
-      const isScheduled = schedule.annualScheduleArray[h.hour];
-
-      if (isScheduled) {
-        day.energyTotal += h.energy;
-        day.waterTotal += h.water; // Water está em Litros
-        
-        if (h.qLoad > 0) {
-            day.qLoadSum += h.qLoad;
-            day.qLoadCount++;
-        }
-
-        // A tempInt só é relevante se o sistema estiver a tentar controlar (ou em carga)
-        if (h.qLoad > 0 || h.tempInt !== h.tempExt) {
-             day.tempIntSum += h.tempInt;
-             day.tempIntCount++;
-        }
-      }
-    });
-
-    // Calcular médias
-    return dailyData.map(d => ({
-      ...d,
-      tempIntMedia: d.tempIntCount > 0 ? (d.tempIntSum / d.tempIntCount).toFixed(1) : "N/A",
-      tempExtMedia: d.tempExtCount > 0 ? (d.tempExtSum / d.tempExtCount).toFixed(1) : "N/A",
-      qLoadMedia: d.qLoadCount > 0 ? (d.qLoadSum / d.qLoadCount).toFixed(1) : "0.0",
-      waterTotal_m3: (d.waterTotal / 1000).toFixed(2)
-    }));
-    
-  }, [annual, schedule.annualScheduleArray]);
 
   return (
     <Card title="Simulação de Funcionamento Anual (8760h)" icon={BarChart2}>
@@ -2049,37 +2013,13 @@ const PageAnnualSim = () => {
               <p className="text-gray-400">Execute a Simulação de Pico (Menu 6) para ver o detalhe aqui.</p>
             )}
 
-            {/* NOVO: Tabela de Resumo Diário (365 dias) */}
-            <h3 className="text-xl font-semibold text-white mb-4 mt-8">Resumo Diário (365 Dias)</h3>
-            <div className="max-h-[500px] overflow-y-auto overflow-x-auto relative">
-                <table className="w-full text-left table-fixed">
-                    <thead className="sticky top-0 bg-gray-700">
-                        <tr>
-                            <th className="p-2 w-16">Dia</th>
-                            <th className="p-2 w-24">Data</th>
-                            <th className="p-2 w-32">Temp. Int. Média (°C)</th>
-                            <th className="p-2 w-32">Temp. Ext. Média (°C)</th>
-                            <th className="p-2 w-32">Carga Média (kW)</th>
-                            <th className="p-2 w-32">Cons. Elétrico (kWh)</th>
-                            <th className="p-2 w-32">Cons. Água (m³)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {dailySummaryData.map(d => (
-                            <tr key={d.day} className="border-b border-gray-700 hover:bg-gray-700/50 text-sm">
-                                <td className="p-2">{d.day}</td>
-                                <td className="p-2">{d.date}</td>
-                                <td className="p-2">{d.tempIntMedia}</td>
-                                <td className="p-2">{d.tempExtMedia}</td>
-                                <td className="p-2">{d.qLoadMedia}</td>
-                                <td className="p-2">{d.energyTotal.toFixed(1)}</td>
-                                <td className="p-2">{d.waterTotal_m3}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
+            {/* Secção Adicionada para o novo gráfico */}
+            <h3 className="text-xl font-semibold text-white mb-4 mt-8">Desempenho do Equipamento no Dia de Pico</h3>
+            {peakDayEquipmentData.length > 0 ? (
+              <PeakDayEquipmentChart data={peakDayEquipmentData} />
+            ) : (
+              <p className="text-gray-400">Execute a simulação anual com equipamento selecionado (Menu 7) para ver este gráfico.</p>
+            )}
         </div>
       )}
     </Card>
@@ -2127,10 +2067,12 @@ const PageImportExport = () => {
         try {
           const importedData = JSON.parse(e.target.result);
           setProjectData(importedData); // Carrega o projeto inteiro
-          alert("Projeto importado com sucesso!");
+          // Substituído 'alert' por 'console.log'
+          console.log("Projeto importado com sucesso!");
         } catch (err) {
           console.error("Erro ao importar JSON:", err);
-          alert("Erro ao ler o ficheiro JSON.");
+          // Substituído 'alert' por 'console.error'
+          console.error("Erro ao ler o ficheiro JSON.");
         }
       };
       reader.readAsText(file);
