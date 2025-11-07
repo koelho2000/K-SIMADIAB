@@ -5,21 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>K‑SIMADIAB</title>
   <!-- TailwindCSS via CDN for styling -->
-  <script src="https://cdn.tailwindcss.com"></script>
   <!-- React and ReactDOM UMD builds -->
-  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <!-- Recharts UMD build -->
-  <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
   <!-- Lucide React icons (optional).  If unavailable the app falls back to emojis. -->
-  <script src="https://cdn.jsdelivr.net/npm/lucide-react@latest/dist/umd/lucide-react.js"></script>
   <!-- Babel compiler to enable JSX in the browser -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+<style>
+@media print{
+  .no-print{ display:none !important; }
+  body{ background:#ffffff !important; color:#000 !important; }
+  a[href]:after{ content: ""; } /* clean URLs */
+}
+</style>
+
+  <link rel="icon" href="favicon.png" />
 </head>
-<body class="bg-gray-900 text-white">
+<body  class="bg-gray-50 text-gray-900">
   <div id="root"></div>
   <!-- The main application code is transpiled by Babel in the browser. -->
-  <script type="text/babel">
+  <!-- Core CDNs for GitHub Pages -->
+<link rel="preconnect" href="https://cdnjs.cloudflare.com">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js" defer></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.min.js"></script>
+
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.2/Recharts.min.js"></script>
+<script type="text/babel">
     /*
       Este ficheiro contém a aplicação K‑SIMADIAB convertida para um formato que
       pode ser executado directamente no browser. As importações ES6 foram
@@ -326,11 +339,11 @@
     // --- Componentes de UI reutilizáveis ---
 
     const Card = ({ title, icon: IconComp, children }) => (
-      <div className="bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
         {title && (
           <div className="flex items-center mb-4 space-x-3">
             {IconComp && React.createElement(IconComp, { className: "h-6 w-6 text-blue-400" })}
-            <h2 className="text-2xl font-semibold text-white">{title}</h2>
+            <h2 className="text-2xl font-semibold text-gray-900">{title}</h2>
           </div>
         )}
         {children}
@@ -339,9 +352,9 @@
 
     const Input = ({ label, value, onChange, unit, ...props }) => (
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-300 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
         <div className="flex items-center space-x-2">
-          <input {...props} value={value} onChange={onChange} className="flex-grow bg-gray-700 border border-gray-600 text-white rounded p-2" />
+          <input {...props} value={value} onChange={onChange} className="flex-grow bg-gray-700 border border-gray-600 text-gray-900 rounded p-2" />
           {unit && <span className="text-gray-400">{unit}</span>}
         </div>
       </div>
@@ -349,8 +362,8 @@
 
     const Select = ({ label, value, onChange, options }) => (
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-300 mb-1">{label}</label>
-        <select value={value} onChange={onChange} className="bg-gray-700 border border-gray-600 text-white rounded p-2 w-full">
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <select value={value} onChange={onChange} className="bg-gray-700 border border-gray-600 text-gray-900 rounded p-2 w-full">
           {options.map(opt => (
             <option key={opt.value} value={opt.value}>{opt.name}</option>
           ))}
@@ -360,8 +373,8 @@
 
     const Button = ({ children, onClick, variant = 'primary', disabled }) => {
       const base = 'px-4 py-2 rounded font-semibold focus:outline-none';
-      const primary = 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-900';
-      const secondary = 'bg-gray-600 hover:bg-gray-700 text-white';
+      const primary = 'bg-blue-600 hover:bg-blue-700 text-gray-900 disabled:bg-blue-900';
+      const secondary = 'bg-gray-600 hover:bg-gray-700 text-gray-900';
       const klass = `${base} ${variant === 'primary' ? primary : secondary}`;
       return (
         <button onClick={onClick} className={klass} disabled={disabled}>{children}</button>
@@ -371,26 +384,26 @@
     const StatBox = ({ label, value }) => (
       <div className="bg-gray-700 rounded p-4 text-center">
         <p className="text-sm text-gray-400 mb-1">{label}</p>
-        <p className="text-xl font-bold text-white">{value}</p>
+        <p className="text-xl font-bold text-gray-900">{value}</p>
       </div>
     );
 
     const Modal = ({ isOpen, onClose, children }) => {
       if (!isOpen) return null;
       return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-900 rounded-lg overflow-hidden shadow-lg max-h-[90vh] w-full max-w-4xl">
+        <div className="fixed inset-0 bg-white bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-50 rounded-lg overflow-hidden shadow-lg max-h-[90vh] w-full max-w-4xl">
             {/* Cabeçalho */}
-            <div className="flex justify-between items-center p-4 border-b border-gray-700 print:hidden">
-              <h3 className="text-xl font-semibold text-white">Relatório Gerado</h3>
-              <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl">&times;</button>
+            <div className="flex justify-between items-center p-4 border-b border-gray-200 print:hidden">
+              <h3 className="text-xl font-semibold text-gray-900">Relatório Gerado</h3>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-900 text-3xl">&times;</button>
             </div>
             {/* Corpo */}
             <div className="flex-1 overflow-y-auto p-0 bg-gray-300 print:bg-white print:p-0 print:overflow-visible">
               {children}
             </div>
             {/* Rodapé */}
-            <div className="p-4 bg-gray-800 border-t border-gray-700 flex justify-end space-x-4 print:hidden">
+            <div className="p-4 bg-white border-t border-gray-200 flex justify-end space-x-4 print:hidden">
               <Button onClick={() => window.print()} variant="primary">Imprimir</Button>
               <Button onClick={onClose} variant="secondary">Fechar</Button>
             </div>
@@ -509,10 +522,10 @@
       const { projectData } = useContext(ProjectContext);
       return (
         <div className="text-center p-10">
-          <h1 className="text-6xl font-bold text-white mb-4">K-SIMADIAB</h1>
+          <h1 className="text-6xl font-bold text-gray-900 mb-4">K-SIMADIAB</h1>
           <p className="text-2xl text-blue-400 mb-2">Versão: {projectData.version}</p>
           <p className="text-xl text-gray-400">Data: {projectData.createdAt}</p>
-          <p className="mt-8 text-lg text-gray-300 max-w-2xl mx-auto">
+          <p className="mt-8 text-lg text-gray-700 max-w-2xl mx-auto">
             Bem-vindo ao K-SIMADIAB, a sua ferramenta de simulação para sistemas de arrefecimento adiabático Chatron.
             Utilize o menu à esquerda para navegar pelas secções e configurar o seu projecto.
           </p>
@@ -554,35 +567,35 @@
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="text-left p-2 border border-gray-700">Dia</th>
-                  <th colSpan={4} className="p-2 border border-gray-700 text-center">00-03</th>
-                  <th colSpan={4} className="p-2 border border-gray-700 text-center">04-07</th>
-                  <th colSpan={4} className="p-2 border border-gray-700 text-center">08-11</th>
-                  <th colSpan={4} className="p-2 border border-gray-700 text-center">12-15</th>
-                  <th colSpan={4} className="p-2 border border-gray-700 text-center">16-19</th>
-                  <th colSpan={4} className="p-2 border border-gray-700 text-center">20-23</th>
+                  <th className="text-left p-2 border border-gray-200">Dia</th>
+                  <th colSpan={4} className="p-2 border border-gray-200 text-center">00-03</th>
+                  <th colSpan={4} className="p-2 border border-gray-200 text-center">04-07</th>
+                  <th colSpan={4} className="p-2 border border-gray-200 text-center">08-11</th>
+                  <th colSpan={4} className="p-2 border border-gray-200 text-center">12-15</th>
+                  <th colSpan={4} className="p-2 border border-gray-200 text-center">16-19</th>
+                  <th colSpan={4} className="p-2 border border-gray-200 text-center">20-23</th>
                 </tr>
               </thead>
               <tbody>
                 {daysOfWeek.map((day, dayIndex) => (
-                  <tr key={day} className="bg-gray-800 even:bg-gray-700/50">
-                    <td className="p-2 border border-gray-700 font-semibold text-white">
+                  <tr key={day} className="bg-white even:bg-gray-700/50">
+                    <td className="p-2 border border-gray-200 font-semibold text-gray-900">
                       {day}
                       <div className="flex space-x-1 mt-1">
-                        <button onClick={() => setDay(dayIndex, true)} className="text-xs bg-blue-600 text-white px-1 rounded hover:bg-blue-700">Todos</button>
-                        <button onClick={() => setDay(dayIndex, false)} className="text-xs bg-gray-600 text-white px-1 rounded hover:bg-gray-700">Nenhum</button>
+                        <button onClick={() => setDay(dayIndex, true)} className="text-xs bg-blue-600 text-gray-900 px-1 rounded hover:bg-blue-700">Todos</button>
+                        <button onClick={() => setDay(dayIndex, false)} className="text-xs bg-gray-600 text-gray-900 px-1 rounded hover:bg-gray-700">Nenhum</button>
                       </div>
                     </td>
                     {schedule.monthlyPatterns[selectedMonth][dayIndex].map((isSet, hourIndex) => (
-                      <td key={hourIndex} onClick={() => toggleHour(dayIndex, hourIndex)} className={`border border-gray-700 h-10 w-6 cursor-pointer ${isSet ? 'bg-blue-500' : 'bg-gray-600 hover:bg-gray-500'}`} title={`Mês ${selectedMonth + 1}, Dia ${day}, Hora ${hourIndex}:00`}></td>
+                      <td key={hourIndex} onClick={() => toggleHour(dayIndex, hourIndex)} className={`border border-gray-200 h-10 w-6 cursor-pointer ${isSet ? 'bg-blue-500' : 'bg-gray-600 hover:bg-gray-500'}`} title={`Mês ${selectedMonth + 1}, Dia ${day}, Hora ${hourIndex}:00`}></td>
                     ))}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <h3 className="text-lg font-semibold text-white mt-6 mb-2">Visualização Anual (Mapa 365x24)</h3>
-          <div className="bg-gray-900 p-2 rounded overflow-hidden" title="Mapa de calor anual (365 dias x 24 horas)">
+          <h3 className="text-lg font-semibold text-gray-900 mt-6 mb-2">Visualização Anual (Mapa 365x24)</h3>
+          <div className="bg-gray-50 p-2 rounded overflow-hidden" title="Mapa de calor anual (365 dias x 24 horas)">
             <div className="flex flex-col" style={{width: 365, height: 24, margin: 'auto'}}>
               {Array(24).fill(0).map((_, h) => (
                 <div key={h} className="flex" style={{ height: 1 }}>
@@ -669,12 +682,12 @@
           <Button onClick={runPeakSimulation}>Simular Dia de Pico</Button>
           {simulation.peakDay && (
             <div className="mt-6">
-              <h3 className="text-xl font-semibold text-white mb-4">Resultados da Simulação de Pico</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">Resultados da Simulação de Pico</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <StatBox label="Dia Mais Quente (Pico de Carga)" value={simulation.peakDay.date} />
                 <StatBox label="Carga de Pico" value={`${simulation.peakDay.peakLoad_kW.toFixed(2)} kW`} />
               </div>
-              <h4 className="text-lg font-semibold text-white mt-6 mb-2">Evolução no Dia de Pico</h4>
+              <h4 className="text-lg font-semibold text-gray-900 mt-6 mb-2">Evolução no Dia de Pico</h4>
               <PeakDayChart data={simulation.peakDay.data} />
               {/* Botão para imprimir/guardar em PDF usando a funcionalidade nativa do browser */}
               <div className="mt-4">
@@ -684,7 +697,7 @@
           )}
           {tbhHistogramData.length > 0 && (
             <div className="mt-6">
-              <h3 className="text-xl font-semibold text-white mt-6 mb-2">Resumo Anual: Histograma de Temperatura Húmida (TBH)</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-2">Resumo Anual: Histograma de Temperatura Húmida (TBH)</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={tbhHistogramData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
@@ -798,7 +811,7 @@
               </thead>
               <tbody>
                 {steps.map(p => (
-                  <tr key={p.etapa} className="border-b border-gray-700 hover:bg-gray-700/50">
+                  <tr key={p.etapa} className="border-b border-gray-200 hover:bg-gray-700/50">
                     <td className="p-2 font-semibold">{p.etapa}</td>
                     <td className="p-2">{p.tempSeca}</td>
                     <td className="p-2">{p.hr}</td>
@@ -811,12 +824,12 @@
           </div>
           {/* Verificação de Cálculo */}
           <div className="mt-6">
-            <h4 className="text-lg font-semibold text-white mb-2">Verificação de Cálculo (Hora de Pico)</h4>
+            <h4 className="text-lg font-semibold text-gray-900 mb-2">Verificação de Cálculo (Hora de Pico)</h4>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <tbody>
                   {verificationList.map((item, idx) => (
-                    <tr key={idx} className="border-b border-gray-700 hover:bg-gray-700/50">
+                    <tr key={idx} className="border-b border-gray-200 hover:bg-gray-700/50">
                       <td className="p-2 font-semibold">{item.label}</td>
                       <td className="p-2">{item.value}</td>
                     </tr>
@@ -827,7 +840,7 @@
           </div>
           {/* Gráfico de dispersão simplificado */}
           <div className="mt-6">
-            <h4 className="text-lg font-semibold text-white mb-2">Gráfico Psicométrico (Simplificado)</h4>
+            <h4 className="text-lg font-semibold text-gray-900 mb-2">Gráfico Psicométrico (Simplificado)</h4>
             <ResponsiveContainer width="100%" height={300}>
               <ScatterChart>
                 <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
@@ -845,7 +858,7 @@
           {/* Gráfico do dia de pico para contexto */}
           {simulation.peakDay && (
             <div className="mt-8">
-              <h4 className="text-lg font-semibold text-white mt-6 mb-2">Evolução no Dia de Pico (Contexto)</h4>
+              <h4 className="text-lg font-semibold text-gray-900 mt-6 mb-2">Evolução no Dia de Pico (Contexto)</h4>
               <PeakDayChart data={simulation.peakDay.data} />
             </div>
           )}
@@ -869,10 +882,10 @@
         { id: 8, name: 'Menu 8 - Psicometria', icon: PieChart }
       ];
       return (
-        <nav className="w-64 bg-gray-800 text-gray-300 p-4 space-y-2 overflow-y-auto">
-          <h2 className="text-2xl font-bold text-white mb-6 px-2">K-SIMADIAB</h2>
+        <nav className="w-64 bg-white text-gray-700 p-4 space-y-2 overflow-y-auto">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 px-2">K-SIMADIAB</h2>
           {menuItems.map(item => (
-            <button key={item.id} onClick={() => onNavigate(item.id)} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-left ${currentPage === item.id ? 'bg-blue-600 text-white' : 'hover:bg-gray-700 hover:text-white'}`}>
+            <button key={item.id} onClick={() => onNavigate(item.id)} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-left ${currentPage === item.id ? 'bg-blue-600 text-gray-900' : 'hover:bg-gray-700 hover:text-gray-900'}`}>
               {item.icon && React.createElement(item.icon, { className: 'h-5 w-5' })}
               <span>{item.name}</span>
             </button>
@@ -893,7 +906,7 @@
       };
       return (
         <ProjectProvider>
-          <div className="flex h-screen bg-gray-900 text-white font-sans">
+          <div className="flex h-screen bg-gray-50 text-gray-900 font-sans">
             <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
             <main className="flex-1 p-8 overflow-y-auto">
               <div className="max-w-7xl mx-auto">
