@@ -1,4 +1,31 @@
 <!DOCTYPE html>
+<div id="boot-status" style="font-family:system-ui,Segoe UI,Arial,sans-serif;font-size:14px;padding:8px 12px;background:#fffbe6;border-bottom:1px solid #facc15;display:flex;gap:12px;flex-wrap:wrap">
+  <strong>Diagnóstico:</strong>
+  <span id="diag-react">React…</span>
+  <span id="diag-reactdom">ReactDOM…</span>
+  <span id="diag-babel">Babel…</span>
+  <span id="diag-recharts">Recharts…</span>
+  <span id="diag-errors" style="color:#b91c1c"></span>
+</div>
+<script>
+(function(){
+  function flag(id, ok){ 
+    var el = document.getElementById(id);
+    if(!el) return;
+    el.textContent = el.textContent.split('…')[0] + (ok ? ' OK ✅' : ' Falhou ❌');
+    el.style.color = ok ? '#166534' : '#b91c1c';
+  }
+  flag('diag-react', !!window.React);
+  flag('diag-reactdom', !!window.ReactDOM);
+  flag('diag-babel', !!window.Babel);
+  flag('diag-recharts', !!window.Recharts);
+  window.onerror = function(message, source, lineno, colno, error){
+    var el = document.getElementById('diag-errors');
+    if(el){ el.textContent = 'Erro: ' + message + ' (' + lineno + ':' + colno + ')'; }
+  };
+})();
+</script>
+
 <html lang="pt">
 <head>
   <meta charset="UTF-8" />
@@ -20,7 +47,7 @@
 
   <link rel="icon" href="favicon.png" />
 </head>
-<body  class="bg-gray-50 text-gray-900">
+<body>  class="bg-gray-50 text-gray-900">
   <div id="root"></div>
   <!-- The main application code is transpiled by Babel in the browser. -->
   <!-- Core CDNs for GitHub Pages -->
@@ -32,7 +59,7 @@
 
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.2/Recharts.min.js"></script>
-<script type="text/babel">
+<script type="text/babel" data-presets="react,env">
     /*
       Este ficheiro contém a aplicação K‑SIMADIAB convertida para um formato que
       pode ser executado directamente no browser. As importações ES6 foram
