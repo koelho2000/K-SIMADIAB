@@ -1,0 +1,2379 @@
+import React, { useState, useEffect, createContext, useContext, useCallback, useMemo } from 'react';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceArea } from 'recharts';
+import { Home, Building, MapPin, Package, Users, Lightbulb, Clock, Thermometer, Wind, BarChart2, FileText, GitCompare, Download, Upload, PieChart } from 'lucide-react';
+
+// --- Constantes & Dados do Catálogo (do PDF) ---
+
+// Distritos de Portugal para o dropdown
+const portugueseDistricts = [
+  "Aveiro", "Beja", "Braga", "Bragança", "Castelo Branco", "Coimbra", "Évora",
+  "Faro", "Guarda", "Leiria", "Lisboa", "Portalegre", "Porto", "Santarém",
+  "Setúbal", "Viana do Castelo", "Vila Real", "Viseu"
+];
+
+// Nomes dos Meses
+const monthNames = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+];
+
+// Dados dos equipamentos baseados no PDF (Chatron Biocooler Smart)
+const equipmentCatalog = {
+  "AE-18V Smart": {
+    model: "AE-18V Smart",
+    caudal: 18000, // m³/h
+    potencia: 1.1, // kW
+    tensao: "200-277 V",
+    tipo: "Axial, Brushless DC",
+    consumoAguaEstimado: 39, // L/h (Estimativa baseada em 1.5g/kg por 10K drop @ 18000m³/h)
+    capacidadeAgua: 30, // L
+    investimento: 2500 // Valor fictício em €
+  },
+  "AE-18VS Smart": {
+    model: "AE-18VS Smart",
+    caudal: 18000, // m³/h
+    potencia: 1.1, // kW
+    tensao: "200-277 V",
+    tipo: "Axial, Single-phase various speed",
+    consumoAguaEstimado: 39, // L/h
+    capacidadeAgua: 30, // L
+    investimento: 2600 // Valor fictício em €
+  },
+  "AE-18H Smart": {
+    model: "AE-18H Smart",
+    caudal: 18000, // m³/h
+    potencia: 1.1, // kW
+    tensao: "230 V",
+    tipo: "Axial, Brushless DC",
+    consumoAguaEstimado: 39, // L/h
+    capacidadeAgua: 30, // L
+    investimento: 2550 // Valor fictício em €
+  },
+  "AE-30V Smart": {
+    model: "AE-30V Smart",
+    caudal: 30000, // m³/h (usando o valor máximo)
+    potencia: 3.0, // kW (usando o valor máximo)
+    tensao: "400 V AC",
+    tipo: "Axial, 3-phase, 2 speed",
+    consumoAguaEstimado: 65, // L/h (Estimativa)
+    capacidadeAgua: 55, // L
+    investimento: 4000 // Valor fictício em €
+  },
+  "AE-30VS Smart": {
+    model: "AE-30VS Smart",
+    caudal: 30000, // m³/h
+    potencia: 3.0, // kW
+    tensao: "400 V AC",
+    tipo: "Axial, 3-phase, 2 speed",
+    consumoAguaEstimado: 65, // L/h
+    capacidadeAgua: 55, // L
+    investimento: 4100 // Valor fictício em €
+  },
+  "AE-30H Smart": {
+    model: "AE-30H Smart",
+    caudal: 30000, // m³/h
+    potencia: 3.0, // kW
+    tensao: "400 V AC",
+    tipo: "Axial, 3-phase, 2 speed",
+    consumoAguaEstimado: 65, // L/h
+    capacidadeAgua: 55, // L
+    investimento: 4050 // Valor fictício em €
+  }
+};
+
+// Tabela de Temperatura do PDF (digitalizada)
+// Chaves: Humidade Relativa (String), Temperatura Exterior (String)
+const tempPerformanceTable = {
+  "20": { "18": 10.4, "20": 12.2, "22": 13.5, "24": 15.0, "26": 16.5, "28": 17.5, "30": 20.4, "32": 21.9, "33": 22.7, "34": 23.4, "35": 24.2, "36": 25.0, "37": 25.7, "38": 26.5, "39": 27.2, "40": 28.0, "42": 29.5, "43": 30.2, "44": 31.0, "45": 31.7 },
+  "25": { "18": 11.4, "20": 13.2, "22": 14.5, "24": 16.0, "26": 17.4, "28": 19.0, "30": 21.2, "32": 23.0, "33": 23.5, "34": 24.3, "35": 25.1, "36": 25.9, "37": 26.7, "38": 27.5, "39": 28.2, "40": 29.0, "42": 30.6, "43": 31.4, "44": 32.2, "45": 33.0 },
+  "30": { "18": 12.4, "20": 13.7, "22": 15.4, "24": 17.0, "26": 18.5, "28": 20.2, "30": 21.9, "32": 23.5, "33": 24.3, "34": 25.1, "35": 26.0, "36": 26.8, "37": 27.6, "38": 28.4, "39": 29.2, "40": 30.0, "42": 31.7, "43": 32.4, "44": 33.3, "45": 34.1 },
+  "40": { "18": 13.5, "20": 15.2, "22": 17.2, "24": 19.0, "26": 20.7, "28": 22.4, "30": 24.6, "32": 25.9, "33": 26.7, "34": 27.6, "35": 28.4, "36": 29.3, "37": 30.1, "38": 31.0, "39": 31.8, "40": 33.6, "42": 35.3, "43": 36.1, "44": 37.0, "45": 38.0 },
+  "50": { "18": 15.5, "20": 16.8, "22": 18.8, "24": 20.7, "26": 22.5, "28": 24.2, "30": 26.4, "32": 27.3, "33": 28.2, "34": 29.1, "35": 30.0, "36": 30.8, "37": 31.7, "38": 32.6, "39": 33.5, "40": 35.3, "42": 36.2, "43": 37.0, "44": 37.8, "45": 38.7 },
+  "60": { "18": 17.1, "20": 18.7, "22": 20.5, "24": 22.4, "26": 24.3, "28": 26.1, "30": 27.7, "32": 28.6, "33": 29.5, "34": 30.4, "35": 31.3, "36": 32.3, "37": 33.2, "38": 34.1, "39": 35.0, "40": 36.8, "42": 37.8, "43": 38.7, "44": 39.6, "45": 40.5 } // 45C@60% é extrapolado
+};
+
+// --- Helpers de Simulação ---
+
+/**
+ * Interpolação linear simples
+ */
+const linearInterp = (x, x1, y1, x2, y2) => {
+  if (x1 === x2) return y1;
+  return y1 + (x - x1) * (y2 - y1) / (x2 - x1);
+};
+
+/**
+ * Calcula a Temperatura de Bolbo Húmido (WBT) - Fórmula de Stull (aproximação)
+ * @param {number} tempExt - Temperatura do ar (Celsius)
+ * @param {number} hrExt - Humidade Relativa (%)
+ * @returns {number} - WBT aproximada (Celsius)
+ */
+const calculateWBT = (tempExt, hrExt) => {
+  try {
+    const T = tempExt;
+    const RH = hrExt;
+    const wbt = T * Math.atan(0.151977 * Math.pow(RH + 8.313659, 0.5)) +
+              Math.atan(T + RH) -
+              Math.atan(RH - 1.676331) +
+              0.00391838 * Math.pow(RH, 1.5) * Math.atan(0.023101 * RH) -
+              4.686035;
+    return parseFloat(wbt.toFixed(1));
+  } catch (e) {
+    return tempExt; // Fallback
+  }
+};
+
+/**
+ * Interpolação bilinear para a tabela de performance
+ * (x = Temp Ext, y = HR Ext)
+ */
+const getSupplyTemp = (tempExt, hrExt) => {
+  try {
+    const hrKeys = Object.keys(tempPerformanceTable).map(Number).sort((a, b) => a - b);
+    const tempKeys = Object.keys(tempPerformanceTable["20"]).map(Number).sort((a, b) => a - b);
+
+    // Encontrar pontos de HR circundantes
+    let y1 = hrKeys.find(k => k >= hrExt) || hrKeys[hrKeys.length - 1];
+    let y2 = hrKeys.slice().reverse().find(k => k <= hrExt) || hrKeys[0];
+    if (y1 === y2) {
+      y1 = hrKeys.find(k => k >= hrExt) || hrKeys[hrKeys.length - 1];
+      y2 = hrKeys.find(k => k <= hrExt) || hrKeys[0];
+    }
+    if (y1 === y2 && hrExt > y1) y2 = hrKeys[hrKeys.indexOf(y1) + 1] || y1;
+    if (y1 === y2 && hrExt < y1) y2 = hrKeys[hrKeys.indexOf(y1) - 1] || y1;
+    if (y1 > y2) [y1, y2] = [y2, y1]; // Garantir y1 < y2
+
+    // Encontrar pontos de Temp circundantes
+    let x1 = tempKeys.find(k => k >= tempExt) || tempKeys[tempKeys.length - 1];
+    let x2 = tempKeys.slice().reverse().find(k => k <= tempExt) || tempKeys[0];
+    if (x1 === x2) {
+        x1 = tempKeys.find(k => k >= tempExt) || tempKeys[tempKeys.length - 1];
+        x2 = tempKeys.find(k => k <= tempExt) || tempKeys[0];
+    }
+    if (x1 === x2 && tempExt > x1) x2 = tempKeys[tempKeys.indexOf(x1) + 1] || x1;
+    if (x1 === x2 && tempExt < x1) x2 = tempKeys[tempKeys.indexOf(x1) - 1] || x1;
+    if (x1 > x2) [x1, x2] = [x2, x1]; // Garantir x1 < x2
+
+    const q11 = tempPerformanceTable[y1.toString()][x1.toString()];
+    const q21 = tempPerformanceTable[y1.toString()][x2.toString()];
+    const q12 = tempPerformanceTable[y2.toString()][x1.toString()];
+    const q22 = tempPerformanceTable[y2.toString()][x2.toString()];
+
+    // Interpolar em x
+    const r1 = linearInterp(tempExt, x1, q11, x2, q21);
+    const r2 = linearInterp(tempExt, x1, q12, x2, q22);
+
+    // Interpolar em y
+    return linearInterp(hrExt, y1, r1, y2, r2);
+
+  } catch (e) {
+    console.error("Erro na interpolação:", e, {tempExt, hrExt});
+    return tempExt; // Retorna temp exterior se falhar
+  }
+};
+
+/**
+ * Gera dados climáticos fictícios (8760h)
+ */
+const generateMockClimate = (district) => {
+  // Médias base (fictícias)
+  const districtBase = { "Lisboa": 17, "Porto": 15, "Faro": 18, "Bragança": 12, "Guarda": 10 };
+  const baseTemp = districtBase[district] || 15;
+  const data = [];
+  const start = new Date(2023, 0, 1);
+
+  for (let d = 0; d < 365; d++) {
+    for (let h = 0; h < 24; h++) {
+      const dayOfYear = d + 1;
+      const hourOfDay = h + 1;
+      
+      // Variação anual (mais quente no verão, dia ~200)
+      const annualVar = -Math.cos((dayOfYear / 365) * 2 * Math.PI) * 8; // Amplitude de 16 graus
+      // Variação diária (mais quente às 15h)
+      const dailyVar = -Math.cos(((hourOfDay - 3) / 24) * 2 * Math.PI) * 5; // Amplitude de 10 graus
+      
+      const noise = (Math.random() - 0.5) * 2;
+      const temp = baseTemp + annualVar + dailyVar + noise;
+      
+      // HR inversamente proporcional à temperatura (simplificação)
+      let rh = 70 - (temp - baseTemp) * 2.5;
+      rh = Math.max(20, Math.min(95, rh + (Math.random() - 0.5) * 10));
+      
+      const tempExt = parseFloat(temp.toFixed(1));
+      const hrExt = parseFloat(rh.toFixed(1));
+      const tempHumida = calculateWBT(tempExt, hrExt);
+
+      data.push({
+        hour: d * 24 + h,
+        date: new Date(start.getTime() + (d * 24 + h) * 3600 * 1000).toISOString(),
+        tempExt: tempExt,
+        hrExt: hrExt,
+        tempHumida: tempHumida,
+      });
+    }
+  }
+  return data;
+};
+
+/**
+ * Agrupa dados numéricos em "bins" para um histograma
+ * @param {number[]} data - Array de números
+ * @param {number} binSize - Tamanho de cada bin (ex: 1 para 1 grau C)
+ * @returns {object[]} - Array de { name, count }
+ */
+const binData = (data, binSize) => {
+  if (data.length === 0) return [];
+  
+  const min = Math.floor(Math.min(...data));
+  const max = Math.ceil(Math.max(...data));
+  const bins = {};
+
+  // Inicializa os bins
+  for (let i = min; i <= max; i += binSize) {
+    bins[i] = 0;
+  }
+
+  // Preenche os bins
+  data.forEach(value => {
+    if(value === undefined || value === null) return;
+    const bin = Math.floor(value / binSize) * binSize;
+    if (bins[bin] !== undefined) {
+      bins[bin]++;
+    } else {
+      // Caso para valores ligeiramente fora (ex: min)
+      const closestBin = Math.floor(min / binSize) * binSize;
+      if (bins[closestBin] !== undefined) {
+          bins[closestBin]++;
+      }
+    }
+  });
+
+  return Object.keys(bins).map(bin => ({
+    name: `${bin}-${parseFloat(bin) + binSize}°C`, // Label (ex: "10-11°C")
+    bin: parseFloat(bin), // Para ordenação
+    count: bins[bin]
+  })).sort((a, b) => a.bin - b.bin);
+};
+
+
+// --- Contexto React ---
+
+const initialProjectData = {
+  projectName: 'K-SIMADIAB Novo Projeto',
+  version: '1.0.0',
+  createdAt: new Date().toISOString().split('T')[0],
+  building: {
+    clientName: '',
+    address: '',
+    nomeEdificio: '',
+  },
+  costs: {
+    electricity: 0.18, // €/kWh
+    water: 2.50, // €/m³
+  },
+  location: {
+    district: 'Lisboa',
+    climateData: [], // 8760h de { hour, date, tempExt, hrExt, tempHumida }
+    climateSummary: null,
+  },
+  space: {
+    length: 20,
+    width: 15,
+    height: 5,
+    envelope: { walls: 3, roof: 3, floor: 1, glass: 3 }, // Níveis 1-5
+    infiltration: 3, // Nível 1-5
+  },
+  loads: {
+    people: 10,
+    equipment: 15, // W/m²
+    metabolism: 100, // W/pessoa (Repouso)
+    lighting: 8, // W/m²
+  },
+  schedule: {
+    // Padrão para cada mês (12), dia da semana (7) [0=Seg...6=Dom], hora (24)
+    monthlyPatterns: Array(12).fill(null).map(() => 
+      Array(7).fill(null).map((_, i) => 
+        // Default: Seg-Sex, 8h-18h
+        Array(24).fill(false).map((h, j) => (i < 5 && j >= 8 && j < 18))
+      )
+    ),
+    // Array de 8760 horas gerado
+    annualScheduleArray: [], // [8760 bools]
+  },
+  simulation: {
+    peakDay: null, // { date, data: [24h] }
+    annual: null, // { energy, water, unmetHours, avgIndoorTemp, results: [8760h] }
+    targetTemp: 25.0, // Temp. interior desejada
+    psychrometryData: null, // Dados para o menu 8
+  },
+  equipment: {
+    selectedModel: null,
+    quantity: 0,
+    proposals: [],
+  },
+};
+
+const ProjectContext = createContext();
+
+const ProjectProvider = ({ children }) => {
+  const [projectData, setProjectData] = useState(initialProjectData);
+
+  // Efeito para sincronizar o array de 8760h com os padrões mensais
+  useEffect(() => {
+    const { monthlyPatterns } = projectData.schedule;
+    const newAnnualSchedule = [];
+    const startDate = new Date(2023, 0, 1); // Ano não bissexto
+    
+    for (let d = 0; d < 365; d++) {
+        const currentDate = new Date(2023, 0, d + 1);
+        const month = currentDate.getMonth(); // 0-11
+        const dayOfWeek = (currentDate.getDay() + 6) % 7; // 0=Seg
+        
+        const dayPattern = monthlyPatterns[month][dayOfWeek];
+        
+        for (let h = 0; h < 24; h++) {
+            newAnnualSchedule.push(dayPattern[h]);
+        }
+    }
+    
+    // Atualizar o estado (evitando loop infinito)
+    if (newAnnualSchedule.length === 8760 && 
+        JSON.stringify(newAnnualSchedule) !== JSON.stringify(projectData.schedule.annualScheduleArray)) 
+    {
+        setProjectData(prev => ({
+            ...prev,
+            schedule: {
+                ...prev.schedule,
+                annualScheduleArray: newAnnualSchedule
+            }
+        }));
+    }
+  }, [projectData.schedule.monthlyPatterns, projectData.schedule.annualScheduleArray]);
+
+
+  const updateProject = useCallback((key, value) => {
+    setProjectData(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  }, []);
+
+  const updateNested = useCallback((key1, key2, value) => {
+    setProjectData(prev => ({
+      ...prev,
+      [key1]: {
+        ...prev[key1],
+        [key2]: value
+      }
+    }));
+  }, []);
+  
+  const updateDeepNested = useCallback((key1, key2, key3, value) => {
+    setProjectData(prev => ({
+      ...prev,
+      [key1]: {
+        ...prev[key1],
+        [key2]: {
+            ...prev[key1][key2],
+            [key3]: value
+        }
+      }
+    }));
+  }, []);
+
+  // Função específica para atualizar o horário complexo
+  const updateSchedulePattern = useCallback((month, day, hour, value) => {
+    setProjectData(prev => {
+      // Cópia profunda dos padrões
+      const newPatterns = prev.schedule.monthlyPatterns.map(m => m.map(d => [...d]));
+      
+      if(hour === 'all') {
+        // Set all hours for this day
+        newPatterns[month][day] = Array(24).fill(value);
+      } else if (hour === 'copyMonth') {
+        // Copiar padrão do mês atual para todos os outros
+        const currentMonthPattern = newPatterns[month];
+        for(let m = 0; m < 12; m++) {
+            if (m !== month) {
+                newPatterns[m] = currentMonthPattern.map(d => [...d]); // Cópia
+            }
+        }
+      } else {
+        // Toggle single hour
+        newPatterns[month][day][hour] = value;
+      }
+      return {
+        ...prev,
+        schedule: {
+          ...prev.schedule,
+          monthlyPatterns: newPatterns
+        }
+      };
+    });
+  }, []);
+
+
+  const contextValue = useMemo(() => ({
+    projectData,
+    setProjectData,
+    updateProject,
+    updateNested,
+    updateDeepNested,
+    updateSchedulePattern,
+  }), [projectData, updateProject, updateNested, updateDeepNested, updateSchedulePattern]);
+
+  return (
+    <ProjectContext.Provider value={contextValue}>
+      {children}
+    </ProjectContext.Provider>
+  );
+};
+
+// --- Componentes Reutilizáveis ---
+
+const Card = ({ title, icon, children }) => (
+  <div className="bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+    <h2 className="text-2xl font-semibold text-white mb-4 flex items-center">
+      {icon && React.createElement(icon, { className: "mr-3 text-blue-400" })}
+      {title}
+    </h2>
+    <div className="text-gray-300">{children}</div>
+  </div>
+);
+
+const Input = ({ label, type = 'text', value, onChange, placeholder, unit }) => (
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-gray-400 mb-1">{label}</label>
+    <div className="flex">
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className="flex-grow bg-gray-700 border border-gray-600 text-white rounded-l-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      {unit && (
+        <span className="inline-flex items-center px-3 rounded-r-md bg-gray-600 text-gray-300 border border-l-0 border-gray-600">
+          {unit}
+        </span>
+      )}
+    </div>
+  </div>
+);
+
+const Select = ({ label, value, onChange, options, children }) => (
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-gray-400 mb-1">{label}</label>
+    <select
+      value={value}
+      onChange={onChange}
+      className="w-full bg-gray-700 border border-gray-600 text-white rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      {options && options.map(opt => (
+        <option key={opt.value || opt} value={opt.value || opt}>{opt.name || opt}</option>
+      ))}
+      {children}
+    </select>
+  </div>
+);
+
+const Slider = ({ label, value, onChange, min, max, step, unit }) => (
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-gray-400 mb-1">
+      {label}: <span className="font-bold text-blue-300">{value} {unit}</span>
+    </label>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={onChange}
+      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer range-lg accent-blue-500"
+    />
+  </div>
+);
+
+const Button = ({ onClick, children, variant = 'primary', ...props }) => {
+  const baseStyle = "px-4 py-2 rounded-md font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed";
+  const styles = {
+    primary: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500",
+    secondary: "bg-gray-600 text-gray-200 hover:bg-gray-700 focus:ring-gray-500",
+  };
+  return (
+    <button onClick={onClick} className={`${baseStyle} ${styles[variant]}`} {...props}>
+      {children}
+    </button>
+  );
+};
+
+// --- Componente Modal ---
+const Modal = ({ isOpen, onClose, children }) => {
+  if (!isOpen) return null;
+
+  return (
+    // Use 'fixed' to overlay, 'z-50' to ensure it's on top.
+    <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4 print:bg-white print:text-black print:p-0">
+      {/* Modal content container */}
+      <div className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col print:bg-white print:shadow-none print:max-w-full print:max-h-full print:overflow-visible">
+        
+        {/* Modal Header (hidden on print) */}
+        <div className="flex justify-between items-center p-4 border-b border-gray-700 print:hidden">
+          <h3 className="text-xl font-semibold text-white">Relatório Gerado</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl">&times;</button>
+        </div>
+        
+        {/* Modal Body (scrollable) */}
+        <div className="flex-1 overflow-y-auto p-0 bg-gray-300 print:bg-white print:p-0 print:overflow-visible">
+          {children}
+        </div>
+        
+        {/* Modal Footer (hidden on print) */}
+        <div className="p-4 bg-gray-800 border-t border-gray-700 flex justify-end space-x-4 print:hidden">
+          <Button onClick={() => window.print()} variant="primary">Imprimir</Button>
+          <Button onClick={onClose} variant="secondary">Fechar</Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Componentes do Relatório ---
+const ReportSection = ({ title, children }) => (
+  // 'page-break-inside-avoid' is not a default Tailwind class, so use style
+  <section className="mb-10 p-4" style={{ pageBreakInside: 'avoid' }}>
+    <h2 className="text-3xl font-bold text-blue-900 mb-6 border-b-2 border-blue-900 pb-2">{title}</h2>
+    {children}
+  </section>
+);
+
+const ReportTable = ({ data }) => (
+  <table className="w-full border-collapse mb-4">
+    <tbody>
+      {data.map(row => (
+        <tr key={row.label} className="border-b border-gray-300 even:bg-gray-50">
+          <td className="p-3 font-semibold text-gray-700 w-1/3">{row.label}</td>
+          <td className="p-3 text-gray-900">{row.value}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+);
+
+const ReportContent = () => {
+  const { projectData } = useContext(ProjectContext);
+  const { building, costs, location, space, loads, schedule, simulation, equipment } = projectData;
+
+  // Helper data calculations
+  const area = space.width * space.length;
+  const volume = area * space.height;
+  const totalCargaInterna = (calculateInternalLoad(loads, space) / 1000).toFixed(2);
+  const totalAnnualHours = schedule.annualScheduleArray.filter(Boolean).length;
+  const percentAnnual = (totalAnnualHours / 8760) * 100;
+  const selectedEquipData = equipmentCatalog[equipment.selectedModel];
+  const capex = (selectedEquipData && equipment.quantity) ? selectedEquipData.investimento * equipment.quantity : 0;
+  const opex = (simulation.annual?.costEnergia || 0) + (simulation.annual?.costAgua || 0);
+
+  const psychroData = useMemo(() => {
+      if (!simulation.peakDay || !simulation.peakDay.peakHourData || !equipment.selectedModel) return null;
+      const { peakHourData, targetTemp } = simulation.peakDay;
+      const { tempExt, hrExt } = peakHourData;
+      const equipData = equipmentCatalog[equipment.selectedModel];
+      const qty = equipment.quantity;
+      const step1 = { etapa: "Ar Exterior", tempSeca: tempExt.toFixed(1), hr: hrExt.toFixed(1) };
+      const tempInsuflacao = getSupplyTemp(tempExt, hrExt);
+      const step2 = { etapa: "Saída do Adiabático", tempSeca: tempInsuflacao.toFixed(1), hr: "95.0" };
+      const blf = calculateBLF(space);
+      const internalLoad = calculateInternalLoad(loads, space);
+      const qLoad_kW = calculateTotalLoad_kW(tempExt, targetTemp, blf, internalLoad);
+      const qCapacity_kW = calculateCoolingCapacity_kW(tempExt, hrExt, targetTemp, equipData, qty);
+      let tempIntResultante;
+      if (qCapacity_kW >= qLoad_kW) tempIntResultante = targetTemp;
+      else {
+        const m_dot_cp_kW = ((equipData.caudal * qty) / 3600) * 1.2 * 1.005;
+        const Q_int_kW = internalLoad / 1000;
+        tempIntResultante = (blf * tempExt + Q_int_kW + m_dot_cp_kW * tempInsuflacao) / (blf + m_dot_cp_kW);
+      }
+      const step3 = { etapa: "Condição Final do Espaço", tempSeca: tempIntResultante.toFixed(1), hr: "???" };
+      return [step1, step2, step3];
+  }, [simulation.peakDay, equipment.selectedModel, equipment.quantity, space, loads]);
+
+  return (
+    // A4-like container for printing
+    <div className="w-full max-w-[210mm] min-h-[297mm] mx-auto bg-white text-black p-12 shadow-lg print:shadow-none print:p-8 print:max-w-full print:min-h-full">
+      
+      {/* Capa */}
+      <div className="h-[270mm] flex flex-col justify-center items-center text-center" style={{ pageBreakAfter: 'always' }}>
+        <h1 className="text-5xl font-bold text-blue-900 mb-8">K-SIMADIAB</h1>
+        <h2 className="text-3xl font-light mb-16">Relatório de Simulação Energética</h2>
+        <p className="text-xl mb-4"><strong>Projeto:</strong> {projectData.projectName}</p>
+        <p className="text-xl mb-4"><strong>Cliente:</strong> {building.clientName || "Não definido"}</p>
+        <p className="text-lg mt-auto text-gray-600"><strong>Data:</strong> {new Date(projectData.createdAt).toLocaleDateString()}</p>
+      </div>
+
+      {/* Índice */}
+      <div className="h-[270mm]" style={{ pageBreakAfter: 'always' }}>
+        <h2 className="text-3xl font-bold text-blue-900 mb-6 border-b-2 border-blue-900 pb-2">Índice</h2>
+        <ul className="list-decimal list-inside text-lg space-y-3">
+          <li>Dados do Edifício e Custos</li>
+          <li>Localização e Clima</li>
+          <li>Definição do Espaço</li>
+          <li>Cargas Internas</li>
+          <li>Horário de Funcionamento</li>
+          <li>Simulação de Pico</li>
+          <li>Equipamento Selecionado</li>
+          <li>Análise Psicrométrica (Hora de Pico)</li>
+          <li>Simulação Anual e Custos Operacionais</li>
+          <li>Conclusão</li>
+        </ul>
+      </div>
+
+      {/* --- Início do Conteúdo --- */}
+
+      <ReportSection title="1. Dados do Edifício e Custos">
+        <ReportTable data={[
+          { label: "Nome do Projeto", value: projectData.projectName },
+          { label: "Cliente", value: building.clientName || "N/D" },
+          { label: "Edifício", value: building.nomeEdificio || "N/D" },
+          { label: "Morada", value: building.address || "N/D" },
+          { label: "Custo Eletricidade", value: `${costs.electricity.toFixed(2)} €/kWh` },
+          { label: "Custo Água", value: `${costs.water.toFixed(2)} €/m³` },
+        ]} />
+      </ReportSection>
+
+      <ReportSection title="2. Localização e Clima">
+        <ReportTable data={[
+          { label: "Distrito", value: location.district },
+          { label: "Temp. Mín. Anual", value: `${location.climateSummary?.minT || 0} °C` },
+          { label: "Temp. Média Anual", value: `${location.climateSummary?.meanT || 0} °C` },
+          { label: "Temp. Máx. Anual", value: `${location.climateSummary?.maxT || 0} °C` },
+          { label: "TBH Média Anual", value: `${location.climateSummary?.meanWBT || 0} °C` },
+          { label: "TBH Máx. Anual", value: `${location.climateSummary?.maxWBT || 0} °C` },
+        ]} />
+      </ReportSection>
+
+      <ReportSection title="3. Definição do Espaço">
+        <ReportTable data={[
+          { label: "Dimensões (CxLxA)", value: `${space.length}m x ${space.width}m x ${space.height}m` },
+          { label: "Área", value: `${area.toFixed(1)} m²` },
+          { label: "Volume", value: `${volume.toFixed(1)} m³` },
+          { label: "Envolvente - Paredes", value: `Nível ${space.envelope.walls}/5` },
+          { label: "Envolvente - Cobertura", value: `Nível ${space.envelope.roof}/5` },
+          { label: "Envolvente - Vidros", value: `Nível ${space.envelope.glass}/5` },
+          { label: "Infiltrações", value: `Nível ${space.infiltration}/5` },
+        ]} />
+      </ReportSection>
+
+      <ReportSection title="4. Cargas Internas">
+        <ReportTable data={[
+          { label: "Nº de Pessoas", value: `${loads.people}` },
+          { label: "Metabolismo", value: `${loads.metabolism} W/pessoa` },
+          { label: "Equipamento", value: `${loads.equipment} W/m²` },
+          { label: "Iluminação", value: `${loads.lighting} W/m²` },
+          { label: "Carga Interna Total", value: `${totalCargaInterna} kW` },
+        ]} />
+      </ReportSection>
+
+      <ReportSection title="5. Horário de Funcionamento">
+        <ReportTable data={[
+          { label: "Horas Anuais de Ocupação", value: `${totalAnnualHours} horas` },
+          { label: "% Ocupação Anual", value: `${percentAnnual.toFixed(1)} %` },
+        ]} />
+      </ReportSection>
+
+      <ReportSection title="6. Simulação de Pico">
+        <ReportTable data={[
+          { label: "Temperatura Alvo Interior", value: `${simulation.targetTemp.toFixed(1)} °C` },
+          { label: "Dia de Pico de Carga", value: simulation.peakDay?.date || "N/A" },
+          { label: "Hora de Pico de Carga", value: simulation.peakDay?.peakHour || "N/A" },
+          { label: "Carga Térmica de Pico", value: `${simulation.peakDay?.peakLoad_kW.toFixed(2) || 0} kW` },
+        ]} />
+      </ReportSection>
+      
+      <ReportSection title="7. Equipamento Selecionado">
+        <ReportTable data={[
+          { label: "Modelo Selecionado", value: equipment.selectedModel || "Nenhum" },
+          { label: "Quantidade", value: equipment.quantity },
+          { label: "Caudal Total", value: `${(selectedEquipData?.caudal * equipment.quantity || 0).toLocaleString('pt-PT')} m³/h` },
+          { label: "Potência Total", value: `${(selectedEquipData?.potencia * equipment.quantity || 0).toFixed(2)} kW` },
+          { label: "Investimento (CAPEX)", value: capex.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) },
+        ]} />
+      </ReportSection>
+
+      <ReportSection title="8. Análise Psicrométrica (Hora de Pico)">
+        {psychroData ? (
+          <table className="w-full border-collapse mb-4">
+             <thead>
+                <tr className="bg-gray-200 border-b-2 border-gray-400">
+                    <th className="p-3 text-left">Etapa do Processo</th>
+                    <th className="p-3 text-left">Temp. Seca (°C)</th>
+                    <th className="p-3 text-left">Hum. Relativa (%)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {psychroData.map(p => (
+                    <tr key={p.etapa} className="border-b border-gray-300 even:bg-gray-50">
+                        <td className="p-3 font-semibold">{p.etapa}</td>
+                        <td className="p-3">{p.tempSeca}</td>
+                        <td className="p-3">{p.hr}</td>
+                    </tr>
+                ))}
+            </tbody>
+          </table>
+        ) : <p>N/A (Requer Simulação de Pico e Equipamento)</p>}
+      </ReportSection>
+
+      <ReportSection title="9. Simulação Anual e Custos Operacionais">
+        <ReportTable data={[
+          { label: "Consumo Elétrico Anual", value: `${simulation.annual?.totalEnergy_kWh.toFixed(0) || 0} kWh` },
+          { label: "Custo Elétrico Anual", value: (simulation.annual?.costEnergia || 0).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) },
+          { label: "Consumo de Água Anual", value: `${simulation.annual?.totalWater_m3.toFixed(1) || 0} m³` },
+          { label: "Custo de Água Anual", value: (simulation.annual?.costAgua || 0).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) },
+          { label: "Custo Operacional Total (OPEX)", value: opex.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) },
+          { label: "Horas de Carga Não Cumprida", value: `${simulation.annual?.unmetHours || 0} h` },
+          { label: "Temp. Média Interior (Operação)", value: `${simulation.annual?.avgIndoorTemp.toFixed(1) || 0} °C` },
+        ]} />
+      </ReportSection>
+
+      {/* Conclusão */}
+      <ReportSection title="10. Conclusão">
+        <p className="text-gray-800 text-base mb-4">
+          Este relatório apresenta uma simulação do desempenho do sistema de arrefecimento adiabático K-SIMADIAB com base nos dados fornecidos.
+          Os resultados de consumo energético (OPEX) e investimento (CAPEX) são estimativas.
+        </p>
+        <p className="text-gray-800 text-base">
+          A solução selecionada de <strong>{equipment.quantity}x {equipment.selectedModel || "N/A"}</strong>
+          resulta num custo operacional estimado de <strong>{opex.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}</strong> por ano,
+          com <strong>{simulation.annual?.unmetHours || 0}</strong> horas em que a temperatura alvo não foi cumprida.
+        </p>
+      </ReportSection>
+
+      {/* Contra Capa */}
+      <div className="h-[270mm] flex flex-col justify-center items-center text-center text-gray-700" style={{ pageBreakBefore: 'always' }}>
+        <h3 className="text-2xl font-light">Fim do Relatório</h3>
+        <h2 className="text-4xl font-bold text-blue-900 mt-4">K-SIMADIAB</h2>
+      </div>
+    </div>
+  );
+};
+
+// --- Componentes de Página ---
+
+const PageHome = () => {
+  const { projectData } = useContext(ProjectContext);
+  return (
+    <div className="text-center p-10">
+      <h1 className="text-6xl font-bold text-white mb-4">K-SIMADIAB</h1>
+      <p className="text-2xl text-blue-400 mb-2">Versão: {projectData.version}</p>
+      <p className="text-xl text-gray-400">Data: {projectData.createdAt}</p>
+      <p className="mt-8 text-lg text-gray-300 max-w-2xl mx-auto">
+        Bem-vindo ao K-SIMADIAB, a sua ferramenta de simulação para sistemas de arrefecimento adiabático Chatron.
+        Utilize o menu à esquerda para navegar pelas secções e configurar o seu projeto.
+      </p>
+    </div>
+  );
+};
+
+const PageBuilding = () => {
+  const { projectData, updateNested, updateDeepNested } = useContext(ProjectContext);
+  const { building, costs } = projectData;
+
+  return (
+    <div>
+      <Card title="Dados do Cliente e Edifício" icon={Building}>
+        <Input
+          label="Nome do Cliente"
+          value={building.clientName}
+          onChange={(e) => updateNested('building', 'clientName', e.target.value)}
+          placeholder="Nome da empresa ou particular"
+        />
+        <Input
+          label="Nome do Edifício"
+          value={building.nomeEdificio}
+          onChange={(e) => updateNested('building', 'nomeEdificio', e.target.value)}
+          placeholder="Ex: Armazém Logístico"
+        />
+        <Input
+          label="Morada"
+          value={building.address}
+          onChange={(e) => updateNested('building', 'address', e.target.value)}
+          placeholder="Rua, Cidade"
+        />
+      </Card>
+      <Card title="Custos de Energia e Água" icon={FileText}>
+        <Input
+          label="Custo da Eletricidade"
+          type="number"
+          value={costs.electricity}
+          onChange={(e) => updateNested('costs', 'electricity', parseFloat(e.target.value))}
+          unit="€/kWh"
+        />
+        <Input
+          label="Custo da Água"
+          type="number"
+          value={costs.water}
+          onChange={(e) => updateNested('costs', 'water', parseFloat(e.target.value))}
+          unit="€/m³"
+        />
+      </Card>
+    </div>
+  );
+};
+
+const PageLocation = () => {
+  const { projectData, updateNested, setProjectData } = useContext(ProjectContext);
+  const { location } = projectData;
+
+  const handleGenerateClimate = () => {
+    const data = generateMockClimate(location.district);
+    const summary = summarizeClimate(data);
+    setProjectData(prev => ({
+      ...prev,
+      location: {
+        ...prev.location,
+        climateData: data,
+        climateSummary: summary,
+      }
+    }));
+  };
+  
+  const handleImportClimate = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          // Espera-se um CSV: hour,tempExt,hrExt
+          const text = e.target.result;
+          const lines = text.split('\n').slice(1); // Ignora cabeçalho
+          const data = lines.map((line, index) => {
+            const [hour, tempExt, hrExt] = line.split(',');
+            if (!isNaN(parseFloat(tempExt)) && !isNaN(parseFloat(hrExt))) {
+              const temp = parseFloat(tempExt);
+              const hr = parseFloat(hrExt);
+              return {
+                hour: index,
+                date: `Importado ${index}h`, // Simplificado
+                tempExt: temp,
+                hrExt: hr,
+                tempHumida: calculateWBT(temp, hr),
+              };
+            }
+            return null;
+          }).filter(Boolean); // Filtra linhas inválidas
+
+          if (data.length !== 8760) {
+            alert(`Ficheiro importado tem ${data.length} linhas. Esperadas 8760.`);
+          }
+          
+          const summary = summarizeClimate(data);
+          setProjectData(prev => ({
+            ...prev,
+            location: {
+              ...prev.location,
+              climateData: data,
+              climateSummary: summary,
+            }
+          }));
+        } catch (err) {
+          console.error("Erro ao importar ficheiro climático:", err);
+          alert("Erro ao ler o ficheiro. Verifique o formato (CSV: hour,tempExt,hrExt).");
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+  
+  const summarizeClimate = (data) => {
+    if (data.length === 0) return null;
+    let minT = data[0].tempExt, maxT = data[0].tempExt, sumT = 0;
+    let minRH = data[0].hrExt, maxRH = data[0].hrExt, sumRH = 0;
+    let minWBT = data[0].tempHumida, maxWBT = data[0].tempHumida, sumWBT = 0;
+
+    data.forEach(h => {
+      if (h.tempExt < minT) minT = h.tempExt;
+      if (h.tempExt > maxT) maxT = h.tempExt;
+      sumT += h.tempExt;
+      if (h.hrExt < minRH) minRH = h.hrExt;
+      if (h.hrExt > maxRH) maxRH = h.hrExt;
+      sumRH += h.hrExt;
+      if (h.tempHumida < minWBT) minWBT = h.tempHumida;
+      if (h.tempHumida > maxWBT) maxWBT = h.tempHumida;
+      sumWBT += h.tempHumida;
+    });
+    
+    return {
+      minT: minT.toFixed(1),
+      maxT: maxT.toFixed(1),
+      meanT: (sumT / data.length).toFixed(1),
+      minRH: minRH.toFixed(1),
+      maxRH: maxRH.toFixed(1),
+      meanRH: (sumRH / data.length).toFixed(1),
+      minWBT: minWBT.toFixed(1),
+      maxWBT: maxWBT.toFixed(1),
+      meanWBT: (sumWBT / data.length).toFixed(1),
+    };
+  };
+
+  const sampledData = useMemo(() => {
+    return location.climateData.filter((_,i) => i % 24 === 0); // Amostra 1x por dia
+  }, [location.climateData]);
+
+
+  return (
+    <Card title="Localização e Ficheiro Climático" icon={MapPin}>
+      <Select
+        label="Distrito em Portugal"
+        value={location.district}
+        onChange={(e) => updateNested('location', 'district', e.target.value)}
+        options={portugueseDistricts}
+      />
+      <div className="flex space-x-4 mb-6">
+        <Button onClick={handleGenerateClimate}>
+          Gerar Ficheiro Climático (Fictício)
+        </Button>
+        <div>
+          <label className="bg-gray-600 text-gray-200 hover:bg-gray-700 px-4 py-2 rounded-md font-semibold cursor-pointer">
+            Importar Ficheiro Climático (8760h CSV)
+            <input type="file" className="hidden" accept=".csv" onChange={handleImportClimate} />
+          </label>
+        </div>
+      </div>
+      
+      {location.climateSummary && (
+        <Card title="Resumo Climático (8760h)" icon={BarChart2}>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <StatBox label="Temp. Mínima" value={`${location.climateSummary.minT} °C`} />
+            <StatBox label="Temp. Média" value={`${location.climateSummary.meanT} °C`} />
+            <StatBox label="Temp. Máxima" value={`${location.climateSummary.maxT} °C`} />
+            <StatBox label="HR Mínima" value={`${location.climateSummary.minRH} %`} />
+            <StatBox label="HR Média" value={`${location.climateSummary.meanRH} %`} />
+            <StatBox label="HR Máxima" value={`${location.climateSummary.maxRH} %`} />
+            <StatBox label="TBH Mínima" value={`${location.climateSummary.minWBT} °C`} />
+            <StatBox label="TBH Média" value={`${location.climateSummary.meanWBT} °C`} />
+            <StatBox label="TBH Máxima" value={`${location.climateSummary.maxWBT} °C`} />
+          </div>
+          
+          <h3 className="text-xl font-semibold text-white mt-6 mb-2">Gráfico Anual de Temperatura Seca</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={sampledData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
+              <XAxis dataKey="hour" stroke="#9CA3AF" label={{ value: 'Hora do Ano (amostrado 1x/dia)', position: 'insideBottom', offset: -10, fill: '#9CA3AF' }} />
+              <YAxis stroke="#9CA3AF" label={{ value: 'Temp (°C)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #4B5563' }} />
+              <Legend />
+              <Line type="monotone" dataKey="tempExt" name="Temp. Exterior" stroke="#F87171" dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+          
+          <h3 className="text-xl font-semibold text-white mt-6 mb-2">Gráfico Anual de Humidade Relativa</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={sampledData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
+              <XAxis dataKey="hour" stroke="#9CA3AF" label={{ value: 'Hora do Ano (amostrado 1x/dia)', position: 'insideBottom', offset: -10, fill: '#9CA3AF' }} />
+              <YAxis stroke="#9CA3AF" label={{ value: 'HR (%)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #4B5563' }} />
+              <Legend />
+              <Line type="monotone" dataKey="hrExt" name="Humidade Relativa" stroke="#3B82F6" dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+
+          <h3 className="text-xl font-semibold text-white mt-6 mb-2">Gráfico Anual de Temperatura Húmida (TBH)</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={sampledData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
+              <XAxis dataKey="hour" stroke="#9CA3AF" label={{ value: 'Hora do Ano (amostrado 1x/dia)', position: 'insideBottom', offset: -10, fill: '#9CA3AF' }} />
+              <YAxis stroke="#9CA3AF" label={{ value: 'TBH (°C)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #4B5563' }} />
+              <Legend />
+              <Line type="monotone" dataKey="tempHumida" name="Temp. Húmida (TBH)" stroke="#34D399" dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+
+        </Card>
+      )}
+    </Card>
+  );
+};
+
+const StatBox = ({ label, value }) => (
+  <div className="bg-gray-700 p-4 rounded-lg text-center">
+    <div className="text-sm text-gray-400">{label}</div>
+    <div className="text-2xl font-bold text-white">{value}</div>
+  </div>
+);
+
+const PageSpace = () => {
+  const { projectData, updateNested, updateDeepNested } = useContext(ProjectContext);
+  const { space } = projectData;
+
+  const area = space.width * space.length;
+  const volume = area * space.height;
+
+  // Atualizar volume quando as dimensões mudam
+  useEffect(() => {
+    updateNested('space', 'volume', space.width * space.length * space.height);
+  }, [space.width, space.length, space.height, updateNested]);
+  
+  const handleSlider = (key, value) => {
+    updateDeepNested('space', 'envelope', key, parseInt(value));
+  };
+
+  return (
+    <Card title="Criação do Espaço a Climatizar" icon={Package}>
+      <h3 className="text-lg font-semibold text-white mb-2">Dimensões</h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Input
+          label="Comprimento"
+          type="number"
+          value={space.length}
+          onChange={(e) => updateNested('space', 'length', parseFloat(e.target.value))}
+          unit="m"
+        />
+        <Input
+          label="Largura"
+          type="number"
+          value={space.width}
+          onChange={(e) => updateNested('space', 'width', parseFloat(e.target.value))}
+          unit="m"
+        />
+        <Input
+          label="Altura"
+          type="number"
+          value={space.height}
+          onChange={(e) => updateNested('space', 'height', parseFloat(e.target.value))}
+          unit="m"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4 mb-6">
+          <StatBox label="Área" value={`${area.toFixed(1)} m²`} />
+          <StatBox label="Volume" value={`${volume.toFixed(1)} m³`} />
+      </div>
+
+      <h3 className="text-lg font-semibold text-white mb-2">Definição da Envolvente (1=Ótimo, 5=Péssimo)</h3>
+      <Slider
+        label="Paredes"
+        min={1} max={5} step={1} value={space.envelope.walls}
+        onChange={(e) => handleSlider('walls', e.target.value)}
+      />
+      <Slider
+        label="Cobertura"
+        min={1} max={5} step={1} value={space.envelope.roof}
+        onChange={(e) => handleSlider('roof', e.target.value)}
+      />
+      <Slider
+        label="Pavimento"
+        min={1} max={5} step={1} value={space.envelope.floor}
+        onChange={(e) => handleSlider('floor', e.target.value)}
+      />
+      <Slider
+        label="Vidros"
+        min={1} max={5} step={1} value={space.envelope.glass}
+        onChange={(e) => handleSlider('glass', e.target.value)}
+      />
+      
+      <h3 className="text-lg font-semibold text-white mt-6 mb-2">Infiltrações (1=Estanque, 5=Muitas)</h3>
+      <Slider
+        label="Nível de Infiltrações"
+        min={1} max={5} step={1} value={space.infiltration}
+        onChange={(e) => updateNested('space', 'infiltration', parseInt(e.target.value))}
+      />
+    </Card>
+  );
+};
+
+const PageLoads = () => {
+  const { projectData, updateNested } = useContext(ProjectContext);
+  const { loads, space } = projectData;
+  
+  const area = space.width * space.length;
+  
+  const totalCargaPessoas = loads.people * loads.metabolism;
+  const totalCargaEquip = loads.equipment * area;
+  const totalCargaIlum = loads.lighting * area;
+  const cargaTotal = (totalCargaPessoas + totalCargaEquip + totalCargaIlum) / 1000; // em kW
+
+  const metabolismTypes = [
+    { name: "Repouso (escritório)", value: 100 },
+    { name: "Leve (loja)", value: 150 },
+    { name: "Moderado (montagem leve)", value: 250 },
+    { name: "Pesado (ginásio)", value: 400 },
+  ];
+
+  const selectedMetabolismName = metabolismTypes.find(t => t.value === loads.metabolism)?.name || "Personalizado";
+
+  return (
+    <Card title="Cargas Internas" icon={Users}>
+      <Slider
+        label="Nº de Pessoas"
+        min={0} max={500} step={1} value={loads.people}
+        onChange={(e) => updateNested('loads', 'people', parseInt(e.target.value))}
+        unit="pessoas"
+      />
+      <Slider
+        label="Equipamento"
+        min={0} max={200} step={1} value={loads.equipment}
+        onChange={(e) => updateNested('loads', 'equipment', parseInt(e.target.value))}
+        unit="W/m²"
+      />
+      <Slider
+        label="Iluminação"
+        min={0} max={50} step={1} value={loads.lighting}
+        onChange={(e) => updateNested('loads', 'lighting', parseInt(e.target.value))}
+        unit="W/m²"
+      />
+      <Select
+        label={`Metabolismo (Ocupação): ${selectedMetabolismName} (${loads.metabolism} W/pessoa)`}
+        value={loads.metabolism}
+        onChange={(e) => updateNested('loads', 'metabolism', parseFloat(e.target.value))}
+        options={metabolismTypes}
+      />
+      
+      <div className="mt-8">
+        <h3 className="text-lg font-semibold text-white mb-2">Resumo de Cargas Internas</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <StatBox label="Carga Pessoas" value={`${(totalCargaPessoas / 1000).toFixed(2)} kW`} />
+            <StatBox label="Carga Equipamento" value={`${(totalCargaEquip / 1000).toFixed(2)} kW`} />
+            <StatBox label="Carga Iluminação" value={`${(totalCargaIlum / 1000).toFixed(2)} kW`} />
+        </div>
+        <div className="bg-blue-900 text-white p-6 rounded-lg text-center">
+            <div className="text-lg text-blue-200">CARGA INTERNA TOTAL</div>
+            <div className="text-4xl font-bold">{cargaTotal.toFixed(2)} kW</div>
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+const PageSchedule = () => {
+  const { projectData, updateSchedulePattern } = useContext(ProjectContext);
+  const { schedule } = projectData;
+  const [selectedMonth, setSelectedMonth] = useState(0); // 0 = Janeiro
+
+  const toggleHour = (dayIndex, hourIndex) => {
+    const currentPattern = schedule.monthlyPatterns[selectedMonth][dayIndex][hourIndex];
+    updateSchedulePattern(selectedMonth, dayIndex, hourIndex, !currentPattern);
+  };
+  
+  const setDay = (dayIndex, value) => {
+    updateSchedulePattern(selectedMonth, dayIndex, 'all', value);
+  };
+
+  const copyMonthPattern = () => {
+    if(confirm("Deseja copiar o padrão deste mês para todos os outros meses?")) {
+        updateSchedulePattern(selectedMonth, null, 'copyMonth', null);
+    }
+  };
+
+  const daysOfWeek = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+  const totalAnnualHours = schedule.annualScheduleArray.filter(Boolean).length;
+  const percentAnnual = (totalAnnualHours / 8760) * 100;
+  
+  // Gera um array de 8760 bools para a visualização anual
+  const annualSchedule = useMemo(() => {
+    return projectData.schedule.annualScheduleArray;
+  }, [projectData.schedule.annualScheduleArray]);
+
+  return (
+    <Card title="Horário de Funcionamento" icon={Clock}>
+      <p className="mb-4">Defina as horas de funcionamento do espaço por mês e dia da semana. O sistema de climatização só funcionará durante este período.</p>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <StatBox label="Nº de Horas de Ocupação/Ano" value={`${totalAnnualHours} horas`} />
+        <StatBox label="% de Ocupação Anual" value={`${percentAnnual.toFixed(1)} %`} />
+      </div>
+      
+      <div className="flex space-x-4 mb-4 items-end">
+          <div className="flex-grow">
+            <Select
+                label="Mês para editar"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                options={monthNames.map((name, index) => ({ name, value: index }))}
+            />
+          </div>
+          <Button onClick={copyMonthPattern} variant="secondary">
+            Copiar este mês para todos
+          </Button>
+      </div>
+
+
+      <div className="overflow-x-auto mt-4">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+              <th className="text-left p-2 border border-gray-700">Dia</th>
+              <th colSpan={4} className="p-2 border border-gray-700 text-center">00-03</th>
+              <th colSpan={4} className="p-2 border border-gray-700 text-center">04-07</th>
+              <th colSpan={4} className="p-2 border border-gray-700 text-center">08-11</th>
+              <th colSpan={4} className="p-2 border border-gray-700 text-center">12-15</th>
+              <th colSpan={4} className="p-2 border border-gray-700 text-center">16-19</th>
+              <th colSpan={4} className="p-2 border border-gray-700 text-center">20-23</th>
+            </tr>
+          </thead>
+          <tbody>
+            {daysOfWeek.map((day, dayIndex) => (
+              <tr key={day} className="bg-gray-800 even:bg-gray-700/50">
+                <td className="p-2 border border-gray-700 font-semibold text-white">
+                  {day}
+                  <div className="flex space-x-1 mt-1">
+                    <button onClick={() => setDay(dayIndex, true)} className="text-xs bg-blue-600 text-white px-1 rounded hover:bg-blue-700">Todos</button>
+                    <button onClick={() => setDay(dayIndex, false)} className="text-xs bg-gray-600 text-white px-1 rounded hover:bg-gray-700">Nenhum</button>
+                  </div>
+                </td>
+                {schedule.monthlyPatterns[selectedMonth][dayIndex].map((isSet, hourIndex) => (
+                  <td
+                    key={hourIndex}
+                    onClick={() => toggleHour(dayIndex, hourIndex)}
+                    className={`border border-gray-700 h-10 w-6 cursor-pointer ${isSet ? 'bg-blue-500' : 'bg-gray-600 hover:bg-gray-500'}`}
+                    title={`Mês ${selectedMonth + 1}, Dia ${day}, Hora ${hourIndex}:00`}
+                  ></td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      
+      {/* Visualização do Horário Anual */}
+      <h3 className="text-lg font-semibold text-white mt-6 mb-2">Visualização Anual (Mapa 365x24)</h3>
+      <div className="bg-gray-900 p-2 rounded overflow-hidden" title="Mapa de calor anual (365 dias x 24 horas)">
+        <div className="flex flex-col" style={{width: 365, height: 24, margin: 'auto'}}>
+            {Array(24).fill(0).map((_, h) => (
+                <div key={h} className="flex" style={{ height: 1 }}>
+                    {Array(365).fill(0).map((_, d) => {
+                        const isSet = annualSchedule[d * 24 + h];
+                        return (
+                            <div key={d} className={`w-px h-px ${isSet ? 'bg-blue-500' : 'bg-gray-700'}`} />
+                        );
+                    })}
+                </div>
+            ))}
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+// --- Funções de Cálculo de Carga ---
+
+// Fator de Carga do Edifício (W/K) - Simplificação Grosseira
+// Combina perdas por transmissão (envolvente) e ventilação (infiltração)
+const calculateBLF = (space) => {
+  const { envelope, infiltration, volume, width, length, height } = space;
+  
+  // U-values (W/m²K) fictícios baseados no slider 1-5
+  const uMap = { 1: 0.2, 2: 0.4, 3: 0.8, 4: 1.5, 5: 3.0 };
+  
+  // Áreas
+  const areaParedes = (length + width) * 2 * height;
+  const areaCobertura = length * width;
+  const areaPavimento = length * width;
+  // Assumir 15% de área de parede como vidro
+  const areaVidros = areaParedes * 0.15 * (uMap[envelope.glass] / uMap[envelope.walls]);
+  const areaParedesOpacas = areaParedes * 0.85;
+
+  // Carga por Transmissão (Q_trans = U * A)
+  const Q_trans_W_K = (areaParedesOpacas * uMap[envelope.walls]) +
+                      (areaCobertura * uMap[envelope.roof]) +
+                      (areaPavimento * uMap[envelope.floor]) + // Pavimento tem menos impacto
+                      (areaVidros * uMap[envelope.glass]);
+                      
+  // ACH (Renovações de Ar por Hora) fictícias baseadas no slider 1-5
+  const achMap = { 1: 0.1, 2: 0.3, 3: 0.7, 4: 1.5, 5: 3.0 };
+  const ach = achMap[infiltration];
+  
+  // Carga por Infiltração (Q_inf = 0.34 * V * ACH)
+  // 0.34 é o fator de calor específico volúmico do ar (Wh/m³K)
+  const Q_inf_W_K = 0.34 * volume * ach;
+  
+  return Q_trans_W_K + Q_inf_W_K; // Total W/K
+};
+
+// Carga Interna Total (W)
+const calculateInternalLoad = (loads, space) => {
+  const area = space.width * space.length;
+  const totalCargaPessoas = loads.people * loads.metabolism;
+  const totalCargaEquip = loads.equipment * area;
+  const totalCargaIlum = loads.lighting * area;
+  return totalCargaPessoas + totalCargaEquip + totalCargaIlum; // Total W
+};
+
+// Carga de Arrefecimento Total (kW)
+const calculateTotalLoad_kW = (tempExt, tempInt, blf_W_K, internalLoad_W) => {
+  const qExt_W = blf_W_K * (tempExt - tempInt);
+  const qTotal_W = qExt_W + internalLoad_W;
+  return qTotal_W / 1000; // em kW
+};
+
+// Capacidade de Arrefecimento do Equipamento (kW)
+const calculateCoolingCapacity_kW = (tempExt, hrExt, tempInt, equipment, quantity) => {
+  if (!equipment || quantity === 0) return 0;
+  
+  const tempSupply = getSupplyTemp(tempExt, hrExt);
+  
+  // Q = m_dot * cp * deltaT
+  // m_dot (kg/s) = Caudal (m³/h) * Densidade (kg/m³) / 3600 (s/h)
+  // cp (kJ/kgK)
+  const caudal_m3_s = (equipment.caudal * quantity) / 3600;
+  const densidadeAr = 1.2; // kg/m³
+  const cpAr = 1.005; // kJ/kgK (ou kWs/kgK)
+  
+  // Capacidade Sensível
+  const qSensivel_kW = caudal_m3_s * densidadeAr * cpAr * (tempInt - tempSupply);
+  
+  return qSensivel_kW;
+};
+
+// Consumo de Água (L/h)
+const calculateWaterConsumption_Lh = (tempExt, hrExt, equipment, quantity) => {
+  if (!equipment || quantity === 0) return 0;
+  
+  const tempSupply = getSupplyTemp(tempExt, hrExt);
+  // Corrigido: Garantir que deltaT nunca é negativo
+  const deltaT = Math.max(0, tempExt - tempSupply);
+  
+  // Estimativa: 1.5g de água por kg de ar por cada 10K de deltaT
+  const g_por_kg = (deltaT / 10) * 1.5;
+  const kg_por_h = (equipment.caudal * quantity) * 1.2; // Caudal (m³/h) * densidade (kg/m³)
+  
+  const g_por_h = g_por_kg * kg_por_h;
+  return g_por_h / 1000; // g/h -> kg/h -> L/h
+};
+
+// --- Fim Funções de Cálculo ---
+
+/**
+ * Componente de Gráfico reutilizável para o Dia de Pico
+ */
+const PeakDayChart = ({ data }) => {
+  if (!data) return null;
+  
+  return (
+    <ResponsiveContainer width="100%" height={400}>
+      <LineChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
+        <XAxis dataKey="horaDoDia" stroke="#9CA3AF" unit="h" />
+        <YAxis yAxisId="left" stroke="#8884d8" label={{ value: 'Temp (°C)', angle: -90, position: 'insideLeft', fill: '#8884d8' }} />
+        <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" label={{ value: 'Carga (kW)', angle: 90, position: 'insideRight', fill: '#82ca9d' }} />
+        <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #4B5563' }} />
+        <Legend />
+        <Line yAxisId="left" type="monotone" dataKey="tempExt" name="Temp. Exterior" stroke="#F87171" />
+        <Line yAxisId="left" type="monotone" dataKey="tempIntSemArrefecimento" name="Temp. Int. (s/ Arref.)" stroke="#FBBF24" strokeDasharray="5 5" />
+        <Line yAxisId="left" type="monotone" dataKey="tempAlvo" name="Temp. Alvo" stroke="#E5E7EB" strokeDasharray="3 3" />
+        <Line yAxisId="left" type="monotone" dataKey="tempInsuflacao" name="Temp. Insuflação (Estimada)" stroke="#3B82F6" />
+        <Line yAxisId="right" type="monotone" dataKey="cargaTotal_kW" name="Carga Térmica" stroke="#34D399" />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+};
+
+/**
+ * Componente de Gráfico reutilizável para o Dia de Pico (Equipamento)
+ */
+const PeakDayEquipmentChart = ({ data }) => {
+  if (!data) return null;
+  
+  return (
+    <ResponsiveContainer width="100%" height={400}>
+      <LineChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
+        <XAxis dataKey="horaDoDia" stroke="#9CA3AF" unit="h" />
+        <YAxis yAxisId="left" stroke="#8884d8" label={{ value: 'Caudal (m³/h) / Água (L/h)', angle: -90, position: 'insideLeft', fill: '#8884d8' }} />
+        <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" label={{ value: 'Temp (°C)', angle: 90, position: 'insideRight', fill: '#82ca9d' }} />
+        <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #4B5563' }} />
+        <Legend />
+        <Line yAxisId="left" type="monotone" dataKey="caudal_m3h" name="Caudal de Ar (m³/h)" stroke="#8884d8" />
+        <Line yAxisId="left" type="monotone" dataKey="consumoAgua_Lh" name="Consumo Água (L/h)" stroke="#3B82F6" strokeDasharray="5 5" />
+        <Line yAxisId="right" type="monotone" dataKey="tempInsuflacao" name="Temp. Insuflação (°C)" stroke="#34D399" />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+};
+
+
+const PagePeakSim = () => {
+  const { projectData, updateNested } = useContext(ProjectContext);
+  const { location, space, loads, simulation } = projectData;
+
+  const runPeakSimulation = () => {
+    if (location.climateData.length === 0) {
+      alert("Por favor, gere ou importe dados climáticos primeiro (Menu 2).");
+      return;
+    }
+
+    const blf = calculateBLF(space);
+    const internalLoad = calculateInternalLoad(loads, space);
+    const targetTemp = simulation.targetTemp;
+
+    let peakLoad = -Infinity;
+    let peakHourData = null;
+
+    location.climateData.forEach(hourData => {
+      const load = calculateTotalLoad_kW(hourData.tempExt, targetTemp, blf, internalLoad);
+      if (load > peakLoad) {
+        peakLoad = load;
+        peakHourData = hourData;
+      }
+    });
+
+    // Encontrar o dia (24h) dessa hora de pico
+    const peakDayIndex = Math.floor(peakHourData.hour / 24);
+    const peakDayData = location.climateData.slice(peakDayIndex * 24, (peakDayIndex + 1) * 24);
+
+    const simulationResults = peakDayData.map(h => {
+      const qTotal = calculateTotalLoad_kW(h.tempExt, targetTemp, blf, internalLoad);
+      const tSupply = getSupplyTemp(h.tempExt, h.hrExt);
+      
+      // Cálculo da temperatura interior sem arrefecimento (flutuação livre)
+      const qInt_W = internalLoad;
+      const blf_W_K = blf; // W/K
+      // T_int = T_ext + Q_int / BLF
+      const tempIntSemArrefecimento = h.tempExt + (qInt_W / blf_W_K);
+
+      return {
+        ...h,
+        horaDoDia: new Date(h.date).getHours(),
+        cargaTotal_kW: qTotal > 0 ? qTotal : 0,
+        tempInsuflacao: tSupply,
+        tempAlvo: targetTemp,
+        tempIntSemArrefecimento: parseFloat(tempIntSemArrefecimento.toFixed(1)),
+      };
+    });
+    
+    updateNested('simulation', 'peakDay', {
+      date: new Date(peakHourData.date).toLocaleDateString(),
+      peakLoad_kW: peakLoad,
+      peakHour: new Date(peakHourData.date).toLocaleString(),
+      peakHourIndex: peakHourData.hour, // Guardar a hora do ano
+      peakHourData: peakHourData, // Guardar a hora de pico completa
+      data: simulationResults
+    });
+  };
+
+  // Mover o Histograma de TBH para aqui
+  const tbhHistogramData = useMemo(() => {
+      if (location.climateData.length === 0) return [];
+      return binData(location.climateData.map(d => d.tempHumida), 1); // Bins de 1 grau
+  }, [location.climateData]);
+
+  return (
+    <Card title="Simular Pico Máximo de Arrefecimento" icon={Thermometer}>
+      <Input
+        label="Temperatura Interior de Referência"
+        type="number"
+        value={simulation.targetTemp}
+        onChange={(e) => updateNested('simulation', 'targetTemp', parseFloat(e.target.value))}
+        unit="°C"
+      />
+      <Button onClick={runPeakSimulation}>Simular Dia de Pico</Button>
+      
+      {simulation.peakDay && (
+        <div className="mt-6">
+          <h3 className="text-xl font-semibold text-white mb-4">Resultados da Simulação de Pico</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <StatBox label="Dia Mais Quente (Pico de Carga)" value={simulation.peakDay.date} />
+            <StatBox label="Carga de Pico" value={`${simulation.peakDay.peakLoad_kW.toFixed(2)} kW`} />
+          </div>
+          
+          <h4 className="text-lg font-semibold text-white mt-6 mb-2">Evolução no Dia de Pico</h4>
+          <PeakDayChart data={simulation.peakDay.data} />
+        </div>
+      )}
+
+      {tbhHistogramData.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-xl font-semibold text-white mt-6 mb-2">Resumo Anual: Histograma de Temperatura Húmida (TBH)</h3>
+            <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={tbhHistogramData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
+                    <XAxis 
+                    dataKey="bin" 
+                    stroke="#9CA3AF" 
+                    label={{ value: 'Temperatura Húmida (°C)', position: 'insideBottom', offset: -10, fill: '#9CA3AF' }}
+                    tickFormatter={(tick) => `${tick}°`}
+                    />
+                    <YAxis stroke="#9CA3AF" label={{ value: 'Nº de Horas', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                    <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #4B5563' }} />
+                    <Legend />
+                    <Bar dataKey="count" name="Nº de Horas" fill="#34D399" />
+                </BarChart>
+            </ResponsiveContainer>
+          </div>
+      )}
+    </Card>
+  );
+};
+
+const PageEquipment = () => {
+  const { projectData, updateNested, setProjectData } = useContext(ProjectContext);
+  const { simulation, equipment } = projectData;
+
+  // Gerar propostas quando a simulação de pico estiver pronta
+  useEffect(() => {
+    if (simulation.peakDay) {
+      const peakLoad = simulation.peakDay.peakLoad_kW;
+      
+      const newProposals = Object.values(equipmentCatalog).map(eq => {
+        // Encontrar a capacidade de arrefecimento do equipamento na hora de pico
+        const peakHourClimate = simulation.peakDay.peakHourData;
+        
+        if (!peakHourClimate) return null; // salvaguarda
+        
+        const { tempExt, hrExt } = peakHourClimate;
+        
+        const qUnit_kW = calculateCoolingCapacity_kW(
+            tempExt, hrExt, simulation.targetTemp, eq, 1
+        );
+        
+        const quantity = qUnit_kW > 0 ? Math.ceil(peakLoad / qUnit_kW) : 0;
+        
+        return {
+          model: eq.model,
+          qUnit_kW: qUnit_kW,
+          quantity: quantity,
+          qTotal_kW: qUnit_kW * quantity,
+          investimentoTotal: eq.investimento * quantity,
+        };
+      }).filter(p => p && p.quantity > 0);
+      
+      updateNested('equipment', 'proposals', newProposals);
+    }
+  }, [simulation.peakDay, simulation.targetTemp, updateNested]);
+
+  const selectProposal = (proposal) => {
+    setProjectData(prev => ({
+      ...prev,
+      equipment: {
+        ...prev.equipment,
+        selectedModel: proposal.model,
+        quantity: proposal.quantity,
+      }
+    }));
+  };
+  
+  const manualSelectEquip = (model) => {
+    updateNested('equipment', 'selectedModel', model);
+  };
+  
+  const manualSelectQty = (qty) => {
+    updateNested('equipment', 'quantity', parseInt(qty) || 0);
+  };
+
+  const selectedEquipData = equipmentCatalog[equipment.selectedModel];
+  const { quantity } = equipment;
+
+  return (
+    <Card title="Definição de Propostas e Equipamento" icon={Wind}>
+      {!simulation.peakDay ? (
+        <p>Por favor, execute a "Simulação de Pico" (Menu 6) primeiro para gerar propostas.</p>
+      ) : (
+        <div>
+          <h3 className="text-xl font-semibold text-white mb-4">Propostas Automáticas (baseado em {simulation.peakDay.peakLoad_kW.toFixed(2)} kW)</h3>
+          <div className="overflow-x-auto mb-6">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-gray-700">
+                  <th className="p-2">Modelo</th>
+                  <th className="p-2">Q. Unidade (Pico)</th>
+                  <th className="p-2">Qtd. Sugerida</th>
+                  <th className="p-2">Q. Total Instalada</th>
+                  <th className="p-2">Invest. Estimado</th>
+                  <th className="p-2">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {equipment.proposals.map(p => (
+                  <tr key={p.model} className="border-b border-gray-700 hover:bg-gray-700/50">
+                    <td className="p-2 font-semibold">{p.model}</td>
+                    <td className="p-2">{p.qUnit_kW.toFixed(2)} kW</td>
+                    <td className="p-2">{p.quantity}</td>
+                    <td className="p-2">{p.qTotal_kW.toFixed(2)} kW</td>
+                    <td className="p-2">{p.investimentoTotal.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}</td>
+                    <td className="p-2"><Button onClick={() => selectProposal(p)}>Selecionar</Button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          <h3 className="text-xl font-semibold text-white mb-4">Seleção Manual</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select
+              label="Equipamento"
+              value={equipment.selectedModel || ""}
+              onChange={(e) => manualSelectEquip(e.target.value)}
+            >
+              <option value="">Selecione um modelo...</option>
+              {Object.keys(equipmentCatalog).map(model => (
+                <option key={model} value={model}>{model}</option>
+              ))}
+            </Select>
+            <Input
+              label="Quantidade"
+              type="number"
+              value={equipment.quantity}
+              onChange={(e) => manualSelectQty(e.target.value)}
+            />
+          </div>
+          
+          {selectedEquipData && quantity > 0 && (
+            <Card title="Resumo da Seleção" icon={Package}>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatBox label="Modelo" value={selectedEquipData.model} />
+                <StatBox label="Quantidade" value={quantity} />
+                <StatBox label="Caudal Total" value={`${(selectedEquipData.caudal * quantity).toLocaleString('pt-PT')} m³/h`} />
+                <StatBox label="Potência Total" value={`${(selectedEquipData.potencia * quantity).toFixed(2)} kW`} />
+                <StatBox label="Cons. Água (Est.)" value={`${(calculateWaterConsumption_Lh(35, 30, selectedEquipData, quantity)).toFixed(1)} L/h`} />
+                <StatBox label="Investimento Total" value={`${(selectedEquipData.investimento * quantity).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}`} />
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+};
+
+const PagePsychrometry = () => {
+    const { projectData } = useContext(ProjectContext);
+    const { simulation, equipment, space, loads } = projectData;
+
+    const psychroData = useMemo(() => {
+        if (!simulation.peakDay || !simulation.peakDay.peakHourData || !equipment.selectedModel) {
+            return null;
+        }
+
+        const { peakHourData, targetTemp } = simulation.peakDay;
+        const { tempExt, hrExt } = peakHourData;
+        const equipData = equipmentCatalog[equipment.selectedModel];
+        const qty = equipment.quantity;
+
+        // 1. Ar Exterior
+        const step1 = {
+            etapa: "Ar Exterior",
+            tempSeca: tempExt.toFixed(1),
+            hr: hrExt.toFixed(1)
+        };
+
+        // 2. Processo Adiabático (Saída)
+        const tempInsuflacao = getSupplyTemp(tempExt, hrExt);
+        const caudal_m3h = equipData.caudal * qty;
+        const consumoAgua_Lh = calculateWaterConsumption_Lh(tempExt, hrExt, equipData, qty);
+
+        const step2 = {
+            etapa: "Saída do Adiabático (Ar Insuflado)",
+            tempSeca: tempInsuflacao.toFixed(1),
+            hr: "95.0", // Estimativa, após saturação
+            caudal: caudal_m3h.toLocaleString('pt-PT'),
+            consumoAgua: consumoAgua_Lh.toFixed(1)
+        };
+        
+        // 3. Condição Interior (Flutuação Livre, antes da mistura)
+        const blf = calculateBLF(space);
+        const internalLoad = calculateInternalLoad(loads, space);
+        const tempIntSemArrefecimento = peakHourData.tempExt + (internalLoad / blf);
+        
+        const step3 = {
+            etapa: "Interior (s/ Arrefecimento)",
+            tempSeca: tempIntSemArrefecimento.toFixed(1),
+            hr: "???", // HR não calculada
+        };
+
+        // 4. Condição do Espaço (Final)
+        // Calcular a temperatura real do espaço nessa hora
+        const qLoad_kW = calculateTotalLoad_kW(tempExt, targetTemp, blf, internalLoad);
+        const qCapacity_kW = calculateCoolingCapacity_kW(tempExt, hrExt, targetTemp, equipData, qty);
+        
+        let tempIntResultante;
+        if (qCapacity_kW >= qLoad_kW) {
+            tempIntResultante = targetTemp;
+        } else {
+            // tempInt = T_ext + (Q_int + Q_trans) / BLF
+            // Q_total_W = Q_int + Q_ext = Q_int + BLF * (T_ext - T_int)
+            // T_int = T_insufl + (Q_int + Q_ext) / (m_dot * cp)
+            
+            // Simplificação: T_int = T_alvo + deltaT_excesso
+            const deltaT_excesso_W = (qLoad_kW - qCapacity_kW) * 1000;
+            // deltaT = Q / (m_dot * cp)
+            const caudal_m3_s = (equipData.caudal * qty) / 3600;
+            const densidadeAr = 1.2;
+            const cpAr = 1.005 * 1000; // J/kgK
+            const m_dot_cp = caudal_m3_s * densidadeAr * cpAr;
+            
+            // Esta lógica é complexa. Usar a da simulação anual
+            const blf_sensivel = blf + (caudal_m3_s * densidadeAr * 1.005);
+            
+            let tempInt;
+            if (qCapacity_kW >= qLoad_kW) {
+              tempInt = targetTemp;
+            } else {
+              // Q_load > Q_cap. A temperatura vai subir.
+              // Q_load = Q_ext + Q_int = BLF * (T_ext - T_int) + Q_int
+              // Q_cap = m_dot * cp * (T_int - T_supply)
+              // Em equilíbrio: Q_load = Q_cap
+              // BLF * (T_ext - T_int) + Q_int = m_dot*cp*(T_int - T_supply)
+              // BLF*T_ext - BLF*T_int + Q_int = m*cp*T_int - m*cp*T_supply
+              // BLF*T_ext + Q_int + m*cp*T_supply = T_int * (m*cp + BLF)
+              // T_int = (BLF*T_ext + Q_int + m*cp*T_supply) / (m*cp + BLF)
+              const m_dot_cp_kW = caudal_m3_s * densidadeAr * 1.005; // kW/K
+              const Q_int_kW = internalLoad / 1000;
+              
+              tempInt = (blf * tempExt + Q_int_kW + m_dot_cp_kW * tempInsuflacao) / (blf + m_dot_cp_kW);
+              tempIntResultante = tempInt;
+            }
+        }
+        
+        const step4 = {
+            etapa: "Condição Final do Espaço (Mistura)",
+            tempSeca: tempIntResultante.toFixed(1),
+            hr: "???" // HR é difícil de calcular sem psicometria completa
+        };
+
+        return [step1, step2, step3, step4];
+
+    }, [simulation.peakDay, equipment.selectedModel, equipment.quantity, space, loads]);
+
+    if (!psychroData) {
+        return (
+            <Card title="Psicometria (Dia de Pico)" icon={PieChart}>
+                <p>Execute a Simulação de Pico (Menu 6) e selecione um Equipamento (Menu 7) para ver esta análise.</p>
+            </Card>
+        );
+    }
+
+    return (
+        <Card title="Psicometria (Dia de Pico)" icon={PieChart}>
+            <p className="mb-4">Análise passo a passo das condições do ar na hora de pico (Pico: {new Date(simulation.peakDay.peakHourData.date).toLocaleString()}).</p>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead>
+                        <tr className="bg-gray-700">
+                            <th className="p-2">Etapa do Processo</th>
+                            <th className="p-2">Temp. Seca (°C)</th>
+                            <th className="p-2">Hum. Relativa (%)</th>
+                            <th className="p-2">Caudal (m³/h)</th>
+                            <th className="p-2">Consumo Água (L/h)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {psychroData.map(p => (
+                            <tr key={p.etapa} className="border-b border-gray-700 hover:bg-gray-700/50">
+                                <td className="p-2 font-semibold">{p.etapa}</td>
+                                <td className="p-2">{p.tempSeca}</td>
+                                <td className="p-2">{p.hr}</td>
+                                <td className="p-2">{p.caudal || "N/A"}</td>
+                                <td className="p-2">{p.consumoAgua || "N/A"}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Gráfico do Dia de Pico adicionado */}
+            {simulation.peakDay && (
+                <div className="mt-8">
+                    <h4 className="text-lg font-semibold text-white mt-6 mb-2">Evolução no Dia de Pico (Contexto)</h4>
+                    <PeakDayChart data={simulation.peakDay.data} />
+                </div>
+            )}
+        </Card>
+    );
+};
+
+
+const PageAnnualSim = () => {
+  const { projectData, updateNested } = useContext(ProjectContext);
+  const { location, space, loads, schedule, simulation, equipment, costs } = projectData;
+  const [isLoading, setIsLoading] = useState(false);
+
+  const runAnnualSimulation = () => {
+    if (location.climateData.length !== 8760) {
+      alert("Dados climáticos de 8760h não estão carregados (Menu 2).");
+      return;
+    }
+    if (schedule.annualScheduleArray.length !== 8760) {
+        alert("Horário anual não está gerado corretamente. Verifique o Menu 5.");
+        return;
+    }
+    if (!equipment.selectedModel || equipment.quantity === 0) {
+      alert("Nenhum equipamento foi selecionado (Menu 7).");
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    // Executar simulação num worker ou timeout para não bloquear a UI
+    setTimeout(() => {
+      const blf = calculateBLF(space);
+      const internalLoad = calculateInternalLoad(loads, space);
+      const targetTemp = simulation.targetTemp;
+      const equipData = equipmentCatalog[equipment.selectedModel];
+      const qty = equipment.quantity;
+
+      let totalEnergy_kWh = 0;
+      let totalWater_L = 0;
+      let unmetHours = 0;
+      let operatingHours = 0;
+      let sumIndoorTemp = 0;
+      let indoorTempHours = 0;
+
+      const annualResults = location.climateData.map(h => {
+        // Usar o schedule.annualScheduleArray[h.hour]
+        const isScheduled = schedule.annualScheduleArray[h.hour];
+        
+        if (!isScheduled) {
+          return { ...h, qLoad: 0, qCapacity: 0, energy: 0, water: 0, tempInt: h.tempExt };
+        }
+        
+        operatingHours++;
+        
+        const qLoad_kW = calculateTotalLoad_kW(h.tempExt, targetTemp, blf, internalLoad);
+        
+        if (qLoad_kW <= 0) {
+          // Não é preciso arrefecer
+          sumIndoorTemp += h.tempExt < targetTemp ? h.tempExt : targetTemp; // Flutuação livre (simplificado)
+          indoorTempHours++;
+          return { ...h, qLoad: 0, qCapacity: 0, energy: 0, water: 0, tempInt: h.tempExt < targetTemp ? h.tempExt : targetTemp };
+        }
+        
+        // Precisa de arrefecer, ligar sistema
+        const qCapacity_kW = calculateCoolingCapacity_kW(h.tempExt, h.hrExt, targetTemp, equipData, qty);
+        const energy_kWh = equipData.potencia * qty; // Assumir potência máxima
+        const water_Lh = calculateWaterConsumption_Lh(h.tempExt, h.hrExt, equipData, qty);
+        
+        totalEnergy_kWh += energy_kWh;
+        totalWater_L += water_Lh;
+        
+        let tempInt;
+        if (qCapacity_kW >= qLoad_kW) {
+          // Consegue manter a carga
+          tempInt = targetTemp;
+        } else {
+          // Não consegue manter a carga, temperatura sobe
+          unmetHours++;
+          // T_int = (BLF*T_ext + Q_int_kW + m*cp*T_supply) / (m*cp + BLF)
+          const m_dot_cp_kW = ((equipData.caudal * qty) / 3600) * 1.2 * 1.005;
+          const Q_int_kW = internalLoad / 1000;
+          const tempInsuflacao = getSupplyTemp(h.tempExt, h.hrExt);
+
+          tempInt = (blf * h.tempExt + Q_int_kW + m_dot_cp_kW * tempInsuflacao) / (blf + m_dot_cp_kW);
+        }
+        
+        sumIndoorTemp += tempInt;
+        indoorTempHours++;
+        
+        return {
+          ...h,
+          qLoad: qLoad_kW,
+          qCapacity: qCapacity_kW,
+          energy: energy_kWh,
+          water: water_Lh,
+          tempInt: tempInt
+        };
+      });
+      
+      const summary = {
+        totalEnergy_kWh: totalEnergy_kWh,
+        totalWater_m3: totalWater_L / 1000,
+        unmetHours: unmetHours,
+        operatingHours: operatingHours,
+        avgIndoorTemp: indoorTempHours > 0 ? (sumIndoorTemp / indoorTempHours) : 0,
+        costEnergia: totalEnergy_kWh * costs.electricity,
+        costAgua: (totalWater_L / 1000) * costs.water,
+        results: annualResults,
+      };
+      
+      updateNested('simulation', 'annual', summary);
+      setIsLoading(false);
+    }, 100); // Timeout
+  };
+
+  const { annual, peakDay } = simulation;
+  const { selectedModel, quantity } = equipment;
+
+  const sampledData = useMemo(() => {
+    return annual ? annual.results.filter((_,i) => i % 24 === 0) : [];
+  }, [annual]);
+
+  const peakDayStartHour = simulation.peakDay ? Math.floor(simulation.peakDay.peakHourIndex / 24) * 24 : null;
+  const peakDayEndHour = peakDayStartHour ? peakDayStartHour + 23 : null;
+
+  const peakDayEquipmentData = useMemo(() => {
+    if (!peakDay || !selectedModel || quantity === 0 || !schedule.annualScheduleArray) return [];
+    
+    const equipData = equipmentCatalog[selectedModel];
+    if (!equipData) return [];
+
+    return peakDay.data.map(h => {
+        const isScheduled = schedule.annualScheduleArray[h.hour];
+        
+        let caudal_m3h = 0;
+        let consumoAgua_Lh = 0;
+        let tempInsuflacao = h.tempExt; // Default to T_ext if off
+
+        // Only run if scheduled and there's a cooling load
+        if (isScheduled && h.cargaTotal_kW > 0) {
+            caudal_m3h = equipData.caudal * quantity;
+            consumoAgua_Lh = calculateWaterConsumption_Lh(h.tempExt, h.hrExt, equipData, quantity);
+            // h.tempInsuflacao é a temp genérica da tabela, é o que queremos
+            tempInsuflacao = h.tempInsuflacao; 
+        }
+
+        return {
+            horaDoDia: h.horaDoDia,
+            caudal_m3h: caudal_m3h,
+            consumoAgua_Lh: consumoAgua_Lh.toFixed(1),
+            tempInsuflacao: parseFloat(tempInsuflacao.toFixed(1))
+        };
+    });
+
+  }, [peakDay, selectedModel, quantity, schedule.annualScheduleArray]);
+  
+  // NOVO: Processar dados para a tabela de 365 dias
+  const dailySummaryData = useMemo(() => {
+    if (!annual) return [];
+
+    const dailyData = Array(365).fill(null).map((_, i) => ({
+      day: i + 1,
+      date: new Date(2023, 0, i + 1).toLocaleDateString('pt-PT', { month: '2-digit', day: '2-digit' }),
+      tempIntSum: 0,
+      tempExtSum: 0,
+      qLoadSum: 0,
+      energyTotal: 0,
+      waterTotal: 0,
+      tempIntCount: 0,
+      tempExtCount: 0,
+      qLoadCount: 0,
+    }));
+
+    annual.results.forEach(h => {
+      const dayIndex = Math.floor(h.hour / 24);
+      if (dayIndex >= 365) return; // Salvaguarda
+      const day = dailyData[dayIndex];
+
+      day.tempExtSum += h.tempExt;
+      day.tempExtCount++;
+      
+      const isScheduled = schedule.annualScheduleArray[h.hour];
+
+      if (isScheduled) {
+        day.energyTotal += h.energy;
+        day.waterTotal += h.water; // Water está em Litros
+        
+        if (h.qLoad > 0) {
+            day.qLoadSum += h.qLoad;
+            day.qLoadCount++;
+        }
+
+        // A tempInt só é relevante se o sistema estiver a tentar controlar (ou em carga)
+        if (h.qLoad > 0 || h.tempInt !== h.tempExt) {
+             day.tempIntSum += h.tempInt;
+             day.tempIntCount++;
+        }
+      }
+    });
+
+    // Calcular médias
+    return dailyData.map(d => ({
+      ...d,
+      tempIntMedia: d.tempIntCount > 0 ? (d.tempIntSum / d.tempIntCount).toFixed(1) : "N/A",
+      tempExtMedia: d.tempExtCount > 0 ? (d.tempExtSum / d.tempExtCount).toFixed(1) : "N/A",
+      qLoadMedia: d.qLoadCount > 0 ? (d.qLoadSum / d.qLoadCount).toFixed(1) : "0.0",
+      waterTotal_m3: (d.waterTotal / 1000).toFixed(2)
+    }));
+    
+  }, [annual, schedule.annualScheduleArray]);
+
+  return (
+    <Card title="Simulação de Funcionamento Anual (8760h)" icon={BarChart2}>
+      <Button onClick={runAnnualSimulation} disabled={isLoading}>
+        {isLoading ? "A Simular... (pode demorar)" : "Executar Simulação Anual"}
+      </Button>
+      
+      {isLoading && (
+        <div className="mt-4 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+            <p className="text-lg text-white mt-2">A processar 8760 horas...</p>
+        </div>
+      )}
+      
+      {annual && !isLoading && (
+        <div className="mt-6">
+            <h3 className="text-xl font-semibold text-white mb-4">Resumo da Simulação Anual</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <StatBox label="Consumo Elétrico" value={`${annual.totalEnergy_kWh.toFixed(0)} kWh`} />
+                <StatBox label="Custo Elétrico" value={`${annual.costEnergia.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}`} />
+                <StatBox label="Consumo Água" value={`${annual.totalWater_m3.toFixed(1)} m³`} />
+                <StatBox label="Custo Água" value={`${annual.costAgua.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}`} />
+                <StatBox label="Horas Operação" value={`${annual.operatingHours} h`} />
+                <StatBox label="Horas Carga Não Cumprida" value={`${annual.unmetHours} h`} />
+                <StatBox label="Temp. Média Interior (Operação)" value={`${annual.avgIndoorTemp.toFixed(1)} °C`} />
+            </div>
+            
+            <h4 className="text-lg font-semibold text-white mt-6 mb-2">Gráficos Anuais (Amostragem diária)</h4>
+            <ResponsiveContainer width="100%" height={400}>
+                <LineChart data={sampledData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
+                    <XAxis dataKey="hour" stroke="#9CA3AF" />
+                    <YAxis yAxisId="left" stroke="#8884d8" label={{ value: 'Temp (°C)', angle: -90, position: 'insideLeft', fill: '#8884d8' }} />
+                    <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" label={{ value: 'Carga/Cap (kW)', angle: 90, position: 'insideRight', fill: '#82ca9d' }} />
+                    <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #4B5563' }} />
+                    <Legend />
+                    
+                    {/* Destaque do dia de pico */}
+                    {peakDayStartHour !== null && 
+                        <ReferenceArea 
+                            x1={peakDayStartHour} 
+                            x2={peakDayEndHour} 
+                            yAxisId="left" 
+                            fill="#F87171" 
+                            fillOpacity={0.2} 
+                            label={{ value: "Dia de Pico", position: "insideTopLeft", fill: "#F87171" }} 
+                        />
+                    }
+
+                    <Line yAxisId="left" type="monotone" dataKey="tempInt" name="Temp. Interior" stroke="#3B82F6" dot={false} />
+                    <Line yAxisId="left" type="monotone" dataKey="tempExt" name="Temp. Exterior" stroke="#F87171" dot={false} />
+                    <Line yAxisId="right" type="monotone" dataKey="qLoad" name="Carga (kW)" stroke="#FBBF24" dot={false} />
+                    <Line yAxisId="right" type="monotone" dataKey="qCapacity" name="Capacidade (kW)" stroke="#34D399" dot={false} />
+                </LineChart>
+            </ResponsiveContainer>
+
+            {/* Secção Adicionada para mostrar o Dia de Pico */}
+            <h3 className="text-xl font-semibold text-white mb-4 mt-8">Detalhe da Simulação do Dia de Pico</h3>
+            {simulation.peakDay ? (
+              <PeakDayChart data={simulation.peakDay.data} />
+            ) : (
+              <p className="text-gray-400">Execute a Simulação de Pico (Menu 6) para ver o detalhe aqui.</p>
+            )}
+
+            {/* NOVO: Tabela de Resumo Diário (365 dias) */}
+            <h3 className="text-xl font-semibold text-white mb-4 mt-8">Resumo Diário (365 Dias)</h3>
+            <div className="max-h-[500px] overflow-y-auto overflow-x-auto relative">
+                <table className="w-full text-left table-fixed">
+                    <thead className="sticky top-0 bg-gray-700">
+                        <tr>
+                            <th className="p-2 w-16">Dia</th>
+                            <th className="p-2 w-24">Data</th>
+                            <th className="p-2 w-32">Temp. Int. Média (°C)</th>
+                            <th className="p-2 w-32">Temp. Ext. Média (°C)</th>
+                            <th className="p-2 w-32">Carga Média (kW)</th>
+                            <th className="p-2 w-32">Cons. Elétrico (kWh)</th>
+                            <th className="p-2 w-32">Cons. Água (m³)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {dailySummaryData.map(d => (
+                            <tr key={d.day} className="border-b border-gray-700 hover:bg-gray-700/50 text-sm">
+                                <td className="p-2">{d.day}</td>
+                                <td className="p-2">{d.date}</td>
+                                <td className="p-2">{d.tempIntMedia}</td>
+                                <td className="p-2">{d.tempExtMedia}</td>
+                                <td className="p-2">{d.qLoadMedia}</td>
+                                <td className="p-2">{d.energyTotal.toFixed(1)}</td>
+                                <td className="p-2">{d.waterTotal_m3}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+      )}
+    </Card>
+  );
+};
+
+const PageReport = () => {
+  const { projectData } = useContext(ProjectContext);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  return (
+    <>
+      <Card title="Geração de Relatório" icon={FileText}>
+        <p className="mb-4">Clique no botão abaixo para gerar um relatório completo do projeto num novo popup.</p>
+        <Button onClick={() => setIsModalOpen(true)} variant="primary">
+          Gerar Relatório
+        </Button>
+      </Card>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <ReportContent />
+      </Modal>
+    </>
+  );
+};
+
+const PageImportExport = () => {
+  const { projectData, setProjectData } = useContext(ProjectContext);
+
+  const exportToJson = () => {
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+      JSON.stringify(projectData, null, 2)
+    )}`;
+    const link = document.createElement("a");
+    link.href = jsonString;
+    link.download = `${projectData.projectName.replace(/\s+/g, '_') || 'K-SIMADIAB_Projeto'}.json`;
+    link.click();
+  };
+
+  const importFromJson = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const importedData = JSON.parse(e.target.result);
+          setProjectData(importedData); // Carrega o projeto inteiro
+          alert("Projeto importado com sucesso!");
+        } catch (err) {
+          console.error("Erro ao importar JSON:", err);
+          alert("Erro ao ler o ficheiro JSON.");
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  return (
+    <Card title="Importar / Exportar Projeto" icon={Download}>
+      <div className="flex space-x-4 mb-6">
+        <Button onClick={exportToJson} variant="primary">
+          <Download className="mr-2" />
+          Exportar Dados (JSON)
+        </Button>
+        <div>
+          <label className="bg-gray-600 text-gray-200 hover:bg-gray-700 px-4 py-2 rounded-md font-semibold cursor-pointer flex items-center">
+            <Upload className="mr-2" />
+            Importar Dados (JSON)
+            <input type="file" className="hidden" accept=".json" onChange={importFromJson} />
+          </label>
+        </div>
+      </div>
+       <p className="text-gray-400">Use esta secção para guardar o seu progresso ou carregar um projeto existente a partir de um ficheiro JSON.</p>
+       
+       {/* Mover a pré-visualização do JSON para aqui - REMOVIDO CONFORME PEDIDO */}
+       {/* <h3 className="text-xl font-semibold text-white mb-4 mt-6">Dados Atuais do Projeto (JSON)</h3>
+        <pre className="bg-gray-900 p-4 rounded-md overflow-auto text-sm text-gray-300 max-h-[40vh]">
+          {JSON.stringify(projectData, null, 2)}
+        </pre> 
+       */}
+    </Card>
+  );
+};
+
+
+const PageCompare = () => {
+  const [projects, setProjects] = useState([]);
+
+  const importForCompare = (event) => {
+    const files = Array.from(event.target.files);
+    let importedProjects = [];
+    let readCount = 0;
+
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          importedProjects.push(data);
+        } catch (err) {
+          console.error("Erro ao ler ficheiro:", err);
+        }
+        readCount++;
+        if (readCount === files.length) {
+          setProjects(prev => [...prev, ...importedProjects]);
+        }
+      };
+      reader.readAsText(file);
+    });
+  };
+
+  const clearCompare = () => setProjects([]);
+
+  const compareData = projects.map(p => {
+    const equip = p.equipment;
+    const equipData = equip.selectedModel ? equipmentCatalog[equip.selectedModel] : null;
+    const annual = p.simulation.annual;
+    
+    const capex = (equipData && equip.quantity) ? equipData.investimento * equip.quantity : 0;
+    const opex = (annual?.costEnergia || 0) + (annual?.costAgua || 0);
+
+    return {
+      name: p.projectName,
+      modelo: equip.selectedModel || "N/D",
+      quantidade: equip.quantity || 0,
+      caudalTotal: (equipData && equip.quantity) ? equipData.caudal * equip.quantity : 0,
+      consumoEletrico: annual?.totalEnergy_kWh || 0,
+      consumoAgua: annual?.totalWater_m3 || 0,
+      tempMediaInt: annual?.avgIndoorTemp || 0,
+      capex: capex,
+      opex: opex,
+    };
+  });
+
+  return (
+    <Card title="Comparativo de Simulações" icon={GitCompare}>
+      <div className="flex space-x-4 mb-6">
+        <div>
+          <label className="bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-md font-semibold cursor-pointer">
+            Importar JSONs para Comparar
+            <input type="file" className="hidden" accept=".json" onChange={importForCompare} multiple />
+          </label>
+        </div>
+        <Button onClick={clearCompare} variant="secondary">Limpar Comparação</Button>
+      </div>
+      
+      {projects.length > 0 && (
+        <div>
+          <h3 className="text-xl font-semibold text-white mb-4">Tabela Comparativa</h3>
+          <div className="overflow-x-auto mb-6">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-gray-700">
+                  <th className="p-2">Projeto</th>
+                  <th className="p-2">Modelo</th>
+                  <th className="p-2">Qtd.</th>
+                  <th className="p-2">Caudal Total (m³/h)</th>
+                  <th className="p-2">Cons. Elétrico (kWh)</th>
+                  <th className="p-2">Cons. Água (m³)</th>
+                  <th className="p-2">Temp. Média Int. (°C)</th>
+                  <th className="p-2">CAPEX (€)</th>
+                  <th className="p-2">OPEX Anual (€)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {compareData.map((p, i) => (
+                  <tr key={i} className="border-b border-gray-700 hover:bg-gray-700/50">
+                    <td className="p-2 font-semibold">{p.name}</td>
+                    <td className="p-2">{p.modelo}</td>
+                    <td className="p-2">{p.quantidade}</td>
+                    <td className="p-2">{p.caudalTotal.toLocaleString('pt-PT')}</td>
+                    <td className="p-2">{p.consumoEletrico.toFixed(0)}</td>
+                    <td className="p-2">{p.consumoAgua.toFixed(1)}</td>
+                    <td className="p-2">{p.tempMediaInt.toFixed(1)}</td>
+                    <td className="p-2">{p.capex.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}</td>
+                    <td className="p-2">{p.opex.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          <h3 className="text-xl font-semibold text-white mb-4">Gráficos Comparativos</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div>
+              <h4 className="text-lg text-center mb-2">Consumos Anuais</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={compareData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
+                  <XAxis dataKey="name" stroke="#9CA3AF" />
+                  <YAxis yAxisId="left" stroke="#8884d8" label={{ value: 'Eletricidade (kWh)', angle: -90, position: 'insideLeft', fill: '#8884d8' }} />
+                  <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" label={{ value: 'Água (m³)', angle: 90, position: 'insideRight', fill: '#82ca9d' }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #4B5563' }} />
+                  <Legend />
+                  <Bar yAxisId="left" dataKey="consumoEletrico" name="Eletricidade (kWh)" fill="#8884d8" />
+                  <Bar yAxisId="right" dataKey="consumoAgua" name="Água (m³)" fill="#82ca9d" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div>
+              <h4 className="text-lg text-center mb-2">Custos (CAPEX vs. OPEX)</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={compareData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
+                  <XAxis dataKey="name" stroke="#9CA3AF" />
+                  <YAxis yAxisId="left" stroke="#FBBF24" label={{ value: 'CAPEX (€)', angle: -90, position: 'insideLeft', fill: '#FBBF24' }} />
+                  <YAxis yAxisId="right" orientation="right" stroke="#F87171" label={{ value: 'OPEX (€)', angle: 90, position: 'insideRight', fill: '#F87171' }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #4B5563' }} />
+                  <Legend />
+                  <Bar yAxisId="left" dataKey="capex" name="CAPEX (Investimento)" fill="#FBBF24" />
+                  <Bar yAxisId="right" dataKey="opex" name="OPEX Anual" fill="#F87171" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+};
+
+// --- Componente Sidebar e App Principal ---
+
+const Sidebar = ({ currentPage, onNavigate }) => {
+  const menuItems = [
+    { id: 0, name: "Página Inicial", icon: Home },
+    { id: 1, name: "Menu 1 - Edifício", icon: Building },
+    { id: 2, name: "Menu 2 - Localização", icon: MapPin },
+    { id: 3, name: "Menu 3 - Espaço", icon: Package },
+    { id: 4, name: "Menu 4 - Cargas Internas", icon: Users },
+    { id: 5, name: "Menu 5 - Horário", icon: Clock },
+    { id: 6, name: "Menu 6 - Simulação Pico", icon: Thermometer },
+    { id: 7, name: "Menu 7 - Equipamento", icon: Wind },
+    { id: 8, name: "Menu 8 - Psicometria", icon: PieChart },
+    { id: 9, name: "Menu 9 - Simulação Anual", icon: BarChart2 },
+    { id: 10, name: "Menu 10 - Relatório", icon: FileText },
+    { id: 11, name: "Menu 11 - Import/Export", icon: Download },
+    { id: 12, name: "Menu 12 - Comparativo", icon: GitCompare },
+  ];
+
+  return (
+    <nav className="w-64 bg-gray-800 text-gray-300 p-4 space-y-2 overflow-y-auto">
+      <h2 className="text-2xl font-bold text-white mb-6 px-2">K-SIMADIAB</h2>
+      {menuItems.map(item => (
+        <button
+          key={item.id}
+          onClick={() => onNavigate(item.id)}
+          className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-left ${
+            currentPage === item.id
+              ? 'bg-blue-600 text-white'
+              : 'hover:bg-gray-700 hover:text-white'
+          }`}
+        >
+          {React.createElement(item.icon, { className: "h-5 w-5" })}
+          <span>{item.name}</span>
+        </button>
+      ))}
+    </nav>
+  );
+};
+
+// Componente App principal
+export default function App() {
+  const [currentPage, setCurrentPage] = useState(0); // Começa na Página Inicial
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 0: return <PageHome />;
+      case 1: return <PageBuilding />;
+      case 2: return <PageLocation />;
+      case 3: return <PageSpace />;
+      case 4: return <PageLoads />;
+      case 5: return <PageSchedule />;
+      case 6: return <PagePeakSim />;
+      case 7: return <PageEquipment />;
+      case 8: return <PagePsychrometry />;
+      case 9: return <PageAnnualSim />;
+      case 10: return <PageReport />;
+      case 11: return <PageImportExport />;
+      case 12: return <PageCompare />;
+      default: return <PageHome />;
+    }
+  };
+
+  return (
+    <ProjectProvider>
+      <div className="flex h-screen bg-gray-900 text-white font-sans">
+        <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
+        <main className="flex-1 p-8 overflow-y-auto">
+          <div className="max-w-7xl mx-auto">
+            {renderPage()}
+          </div>
+        </main>
+      </div>
+    </ProjectProvider>
+  );
+}
